@@ -1,0 +1,21 @@
+Echipa TAM, grupa 505: Ion Alexandra, Dobre Talida Marina, Postolache Andreea Miruna
+
+    Task     | Alexandra | Talida | Miruna
+-------------------------------------------
+                Modul analiza
+-------------------------------------------
+ cerinte 1-6 |    X      |    X   |    X
+ cerinta 7   |           |        |    X
+ cerinte 8-9 |    X      |    X   |    X
+-------------------------------------------
+                 Modul back-end
+-------------------------------------------
+ cerinte 1-3 |    X      |    X   |    X
+ cerinte 4-6 |           |        |    X
+ cerinta 7   |           |    X   |    X
+-------------------------------------------
+                 Modul front-end
+-------------------------------------------
+ cerinte 1-4: Alexandra: - codul pentru frontend
+ cerinte 1-4: Talida: implementarea CRUD prin ords pentru tabelele care tin de user, review si book
+ cerinte 1-4: Miruna: implementarea CRUD  prin ords pentru tabelele care tin de country, city, address, order_tam si order_detail

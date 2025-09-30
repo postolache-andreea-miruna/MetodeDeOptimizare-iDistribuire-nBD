@@ -1,0 +1,4073 @@
+--1 Crearea bazelor de date și a utilizatorilor
+--tnsnames.ora
+ORACLR_CONNECTION_DATA =
+  (DESCRIPTION =
+    (ADDRESS_LIST =
+      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROC1521))
+    )
+    (CONNECT_DATA =
+      (SID = CLRExtProc)
+      (PRESENTATION = RO)
+    )
+  )
+
+LISTENER_ORCL2 =
+  (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521))
+
+LISTENER_ORCL =
+  (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521))
+
+
+#DB1
+ORCL =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = orcl)
+    )
+  )
+
+BD_EXEU =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVICE_NAME = orcl)
+    )
+  )
+
+#DB2
+ORCL2 =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = orcl2)
+    )
+  )
+BD_EU =
+  (DESCRIPTION =
+    (ADDRESS_LIST =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521))
+    )
+    (CONNECT_DATA =
+      (SERVICE_NAME = orcl2)
+    )
+  )
+--utilizatori
+--orcl
+--utilizatorul de la DWBI pentru OLTP cu baza de date initiala
+create role master; 
+ 
+grant create view to master;
+GRANT CREATE PROCEDURE TO master;
+GRANT CREATE SEQUENCE TO master;
+GRANT CREATE SYNONYM TO master;
+GRANT CREATE TABLE TO master;
+GRANT CREATE TRIGGER TO master;
+GRANT CREATE TYPE TO master;
+GRANT QUERY REWRITE TO master;
+GRANT CONNECT TO master;
+GRANT RESOURCE TO master;
+GRANT SELECT_CATALOG_ROLE to master;
+GRANT CREATE MATERIALIZED VIEW to master;
+GRANT ALTER SESSION to master;
+GRANT SELECT ANY DICTIONARY to master;
+GRANT CREATE PUBLIC DATABASE LINK to master;
+GRANT CREATE PUBLIC SYNONYM to master;
+grant create dimension to master;
+
+create user DWBI_miruna identified by DWBI_miruna;
+grant  master to DWBI_miruna;
+grant  UNLIMITED TABLESPACE  to  DWBI_miruna;
+
+
+CREATE USER bdd IDENTIFIED BY bddexeu;
+CREATE USER bdd_global IDENTIFIED BY bddglobal;
+create role master_;
+
+grant create view to master_;
+GRANT CREATE PROCEDURE TO master_;
+GRANT CREATE SEQUENCE TO master_;
+GRANT CREATE SYNONYM TO master_;
+GRANT CREATE TABLE TO master_;
+GRANT CREATE TRIGGER TO master_;
+GRANT CREATE TYPE TO master_;
+GRANT QUERY REWRITE TO master_;
+GRANT CONNECT TO master_;
+GRANT RESOURCE TO master_;
+GRANT SELECT_CATALOG_ROLE to master_;
+GRANT CREATE MATERIALIZED VIEW to master_;
+GRANT ALTER SESSION to master_;
+GRANT SELECT ANY DICTIONARY to master_;
+GRANT CREATE PUBLIC DATABASE LINK to master_;
+GRANT CREATE PUBLIC SYNONYM to master_;
+grant create dimension to master_;
+ 
+grant  master_ to  bdd;
+grant  UNLIMITED TABLESPACE  to  bdd;
+
+grant  master_ to  bdd_global;
+grant  UNLIMITED TABLESPACE  to  bdd_global;
+
+CREATE PUBLIC DATABASE LINK bd_eu 
+CONNECT TO bdd  
+IDENTIFIED BY bddeu --parola userului din bd spre care e linkul, adica orcl2  
+USING 'localhost:1521/orcl2'; 
+
+--orcl2
+CREATE USER bdd IDENTIFIED BY bddeu;
+
+create role master_;
+
+grant create view to master_;
+GRANT CREATE PROCEDURE TO master_;
+GRANT CREATE SEQUENCE TO master_;
+GRANT CREATE SYNONYM TO master_;
+GRANT CREATE TABLE TO master_;
+GRANT CREATE TRIGGER TO master_;
+GRANT CREATE TYPE TO master_;
+GRANT QUERY REWRITE TO master_;
+GRANT CONNECT TO master_;
+GRANT RESOURCE TO master_;
+GRANT SELECT_CATALOG_ROLE to master_;
+GRANT CREATE MATERIALIZED VIEW to master_;
+GRANT ALTER SESSION to master_;
+GRANT SELECT ANY DICTIONARY to master_;
+GRANT CREATE PUBLIC DATABASE LINK to master_;
+GRANT CREATE PUBLIC SYNONYM to master_;
+grant create dimension to master_;
+
+grant  master_ to  bdd;
+grant  UNLIMITED TABLESPACE  to  bdd;
+
+CREATE PUBLIC DATABASE LINK bd_exeu 
+CONNECT TO bdd  
+IDENTIFIED BY bddexeu --parola userului din bd spre care e linkul, adica orcl 
+USING 'localhost:1521/orcl'; 
+
+--2+3 Crearea relațiilor și a fragmentelor + Popularea cu date a bazelor de date 
+--orcl sys
+GRANT SELECT ON DWBI_miruna.USER_TAM TO bdd;
+
+GRANT SELECT ON DWBI_miruna.ADDRESS TO bdd;
+GRANT SELECT ON DWBI_miruna.AUTHOR TO bdd;
+GRANT SELECT ON DWBI_miruna.BOOK TO bdd;
+GRANT SELECT ON DWBI_miruna.CATEGORY TO bdd;
+GRANT SELECT ON DWBI_miruna.CITY TO bdd;
+GRANT SELECT ON DWBI_miruna.COUNTRY TO bdd;
+GRANT SELECT ON DWBI_miruna.ORDER_DETAIL TO bdd;
+GRANT SELECT ON DWBI_miruna.ORDER_TAM TO bdd;
+GRANT SELECT ON DWBI_miruna.PUBLISHER TO bdd;
+GRANT SELECT ON DWBI_miruna.REVIEW TO bdd;
+GRANT SELECT ON DWBI_miruna.SERIE TO bdd;
+
+-- grant select si pentru bdd_global
+GRANT SELECT ON DWBI_miruna.USER_TAM TO bdd_global;
+
+--grant select pentru ca bdd din db1 sa acceseze user_tam_global din bdd_global din db1 NECESAR pentru regula reconstructie la verificare verticala
+GRANT SELECT ON bdd_global.USER_TAM_GLOBAL TO bdd;
+
+--pt transparenta
+GRANT SELECT ON DWBI_miruna.COUNTRY TO bdd_global;
+
+
+--exeu
+select * from DWBI_miruna.country;
+CREATE TABLE COUNTRY_EXEU AS
+SELECT * FROM DWBI_miruna.country
+WHERE name IN ('Anglia', 'Australia', 'Canada', 'India', 'SUA', 'Turcia');
+SELECT * FROM COUNTRY_EXEU;
+
+--eu
+CREATE TABLE COUNTRY_EU AS
+SELECT * FROM DWBI_miruna.country@bd_exeu
+WHERE name NOT IN ('Anglia', 'Australia', 'Canada', 'India', 'SUA', 'Turcia');
+
+SELECT * FROM COUNTRY_EU;
+
+--exeu
+-- Verificarea corectitudinii fragmentarii orizontale primare
+--1 Completitudinea
+SELECT * FROM DWBI_miruna.country
+MINUS
+(SELECT * FROM country_exeu
+UNION ALL
+SELECT * FROM country_eu@bd_eu);
+
+-- cum nu apare nicio linie in tabelul rezultat inseamna ca regula de completitudine este respectata
+
+--2 reconstructia (baza de date centralizata = bd_exeu reunita cu bd_eu)
+
+-- reuniune inclusa in centralizat 
+SELECT * FROM DWBI_miruna.country
+MINUS
+(SELECT * FROM country_exeu
+UNION ALL
+SELECT * FROM country_eu@bd_eu);
+
+-- centralizata inclusa in reuniune
+(SELECT * FROM country_exeu
+UNION ALL
+SELECT * FROM country_eu@bd_eu)
+MINUS
+SELECT * FROM DWBI_miruna.country;
+
+-- cum nu apare nicio linie in tabelele rezultat inseamna ca regula de reconstructie este respectata
+
+--3 disjunctia
+SELECT * FROM country_exeu
+INTERSECT
+SELECT * FROM country_eu@bd_eu;
+-- cum nu apare nicio linie in tabelul rezultat inseamna ca regula de disjunctie este respectata
+
+--cum toate cele 3 reguli: completitudine, reconstructie, disjunctie sunt respectate, rezulta ca fragmentarea este corecta
+
+--derivata
+
+--exeu
+-- CITY
+--pregatire
+select * from DWBI_miruna.city;
+
+SELECT centralizat.*
+FROM DWBI_miruna.city centralizat
+WHERE EXISTS (SELECT 1 FROM country_exeu ex WHERE centralizat.id_country = ex.id_country);
+--stop pregatire
+
+CREATE TABLE CITY_EXEU AS
+SELECT centralizat.*
+FROM DWBI_miruna.city centralizat
+WHERE EXISTS (SELECT 1 FROM country_exeu ex WHERE centralizat.id_country = ex.id_country);
+
+-- ADDRESS
+--pregatire
+select * from DWBI_miruna.address;
+
+SELECT centralizat.*
+FROM DWBI_miruna.address centralizat
+WHERE EXISTS (SELECT 1 FROM city_exeu ex WHERE centralizat.id_city = ex.id_city);
+--stop pregatire
+
+CREATE TABLE ADDRESS_EXEU AS
+SELECT centralizat.*
+FROM DWBI_miruna.address centralizat
+WHERE EXISTS (SELECT 1 FROM city_exeu ex WHERE centralizat.id_city = ex.id_city);
+
+SELECT * FROM ADDRESS_EXEU;
+
+-- ORDER_TAM
+--pregatire
+select * from DWBI_miruna.order_tam;
+
+SELECT centralizat.*
+FROM DWBI_miruna.order_tam centralizat
+WHERE EXISTS (SELECT 1 FROM address_exeu ex WHERE centralizat.id_address = ex.id_address);
+--stop pregatire
+
+CREATE TABLE ORDER_TAM_EXEU AS
+SELECT centralizat.*
+FROM DWBI_miruna.order_tam centralizat
+WHERE EXISTS (SELECT 1 FROM address_exeu ex WHERE centralizat.id_address = ex.id_address);
+
+SELECT * FROM ORDER_TAM_EXEU;
+
+-- ORDER_DETAIL
+--pregatire
+select * from DWBI_miruna.order_detail;
+
+SELECT centralizat.*
+FROM DWBI_miruna.order_detail centralizat
+WHERE EXISTS (SELECT 1 FROM order_tam_exeu ex WHERE centralizat.id_order = ex.id_order);
+--stop pregatire
+
+CREATE TABLE ORDER_DETAIL_EXEU AS
+SELECT centralizat.*
+FROM DWBI_miruna.order_detail centralizat
+WHERE EXISTS (SELECT 1 FROM order_tam_exeu ex WHERE centralizat.id_order = ex.id_order);
+
+SELECT * FROM order_detail_exeu;
+
+--eu
+--II. FRAGMENTAREA ORIZONTALA DERIVATA
+
+-- CITY
+SELECT * FROM DWBI_miruna.city@bd_exeu;
+
+CREATE TABLE CITY_EU AS
+SELECT centralizat.*
+FROM DWBI_miruna.city@bd_exeu centralizat
+WHERE EXISTS (SELECT 1 FROM country_eu eu WHERE centralizat.id_country = eu.id_country);
+
+SELECT * FROM CITY_EU;
+-- ADDRESS
+CREATE TABLE ADDRESS_EU AS
+SELECT centralizat.*
+FROM DWBI_miruna.address@bd_exeu centralizat
+WHERE EXISTS (SELECT 1 FROM city_eu eu WHERE centralizat.id_city = eu.id_city);
+
+SELECT * FROM ADDRESS_EU;
+-- ORDER_TAM
+CREATE TABLE ORDER_TAM_EU AS
+SELECT centralizat.*
+FROM DWBI_miruna.order_tam@bd_exeu centralizat
+WHERE EXISTS (SELECT 1 FROM address_eu eu WHERE centralizat.id_address = eu.id_address);
+
+SELECT * FROM ORDER_TAM_EU;
+-- ORDER_DETAIL
+CREATE TABLE ORDER_DETAIL_EU AS
+SELECT centralizat.*
+FROM DWBI_miruna.order_detail@bd_exeu centralizat
+WHERE EXISTS (SELECT 1 FROM order_tam_eu eu WHERE centralizat.id_order = eu.id_order);
+
+SELECT * FROM ORDER_DETAIL_EU;
+
+--exeu
+
+-- Verificarea corectitudinii fragmentarii orizontale derivate
+-- CITY
+-- 1. Completitudine
+
+SELECT * FROM DWBI_miruna.city
+MINUS
+(SELECT c.*
+ FROM city_exeu c, country_exeu co
+ WHERE c.id_country = co.id_country
+ UNION ALL
+ SELECT c.*
+ FROM city_eu@bd_eu c, country_eu@bd_eu co
+ WHERE c.id_country = co.id_country);
+
+SELECT * FROM DWBI_miruna.city
+MINUS
+(SELECT * FROM city_exeu
+UNION ALL
+SELECT * FROM city_eu@bd_eu);
+
+-- cum nu apare nicio linie in tabelele rezultat inseamna ca regula de completitudine este respectata
+
+-- 2. Reconstructia (baza de date centralizata = bd_exeu reunita cu bd_eu)
+
+-- reuniune inclusa in centralizata
+SELECT * FROM DWBI_miruna.city
+MINUS
+(SELECT * FROM city_exeu
+UNION ALL
+SELECT * FROM city_eu@bd_eu);
+
+-- centralizata inclusa in reuniune
+(SELECT * FROM city_exeu
+UNION ALL
+SELECT * FROM city_eu@bd_eu)
+MINUS
+SELECT * FROM DWBI_miruna.city;
+
+-- cum nu apare nicio linie in tabelele rezultat inseamna ca regula de reconstructie este respectata
+
+-- 3. Disjunctie
+SELECT * FROM city_exeu
+INTERSECT
+SELECT * FROM city_eu@bd_eu;
+-- cum nu apare nicio linie in tabelul rezultat inseamna ca regula de disjunctie este respectata
+
+--cum toate cele 3 reguli: completitudine, reconstructie, disjunctie sunt respectate, rezulta ca fragmentarea este corecta pentru CITY
+
+
+-- ADDRESS
+-- 1. Completitudine
+
+SELECT * FROM DWBI_miruna.address
+MINUS
+(SELECT a.*
+ FROM address_exeu a, city_exeu c
+ WHERE a.id_city = c.id_city
+ UNION ALL
+ SELECT a.*
+ FROM address_eu@bd_eu a, city_eu@bd_eu c
+ WHERE a.id_city = c.id_city);
+
+SELECT * FROM DWBI_miruna.address
+MINUS
+(SELECT * FROM address_exeu
+UNION ALL
+SELECT * FROM address_eu@bd_eu);
+
+-- cum nu apare nicio linie in tabelele rezultat inseamna ca regula de completitudine este respectata
+
+-- 2. Reconstructia (baza de date centralizata = bd_exeu reunita cu bd_eu)
+
+-- reuniune inclusa in centralizata
+SELECT * FROM DWBI_miruna.address
+MINUS
+(SELECT * FROM address_exeu
+UNION ALL
+SELECT * FROM address_eu@bd_eu);
+
+-- centralizata inclusa in reuniune
+(SELECT * FROM address_exeu
+UNION ALL
+SELECT * FROM address_eu@bd_eu)
+MINUS
+SELECT * FROM DWBI_miruna.address;
+
+-- cum nu apare nicio linie in tabelele rezultat inseamna ca regula de reconstructie este respectata
+
+-- 3. Disjunctie
+SELECT * FROM address_exeu
+INTERSECT
+SELECT * FROM address_eu@bd_eu;
+-- cum nu apare nicio linie in tabelul rezultat inseamna ca regula de disjunctie este respectata
+
+--cum toate cele 3 reguli: completitudine, reconstructie, disjunctie sunt respectate, rezulta ca fragmentarea este corecta pentru ADDRESS
+
+
+--ORDER_TAM
+-- 1. Completitudine
+
+SELECT * FROM DWBI_miruna.order_tam
+MINUS
+(SELECT o.*
+ FROM order_tam_exeu o, address_exeu a
+ WHERE o.id_address = a.id_address
+ UNION ALL
+ SELECT o.*
+ FROM order_tam_eu@bd_eu o, address_eu@bd_eu a
+ WHERE o.id_address = a.id_address);
+
+SELECT * FROM DWBI_miruna.order_tam
+MINUS
+(SELECT * FROM order_tam_exeu
+UNION ALL
+SELECT * FROM order_tam_eu@bd_eu);
+
+-- cum nu apare nicio linie in tabelele rezultat inseamna ca regula de completitudine este respectata
+
+-- 2. Reconstructia (baza de date centralizata = bd_exeu reunita cu bd_eu)
+
+-- reuniune inclusa in centralizata
+SELECT * FROM DWBI_miruna.order_tam
+MINUS
+(SELECT * FROM order_tam_exeu
+UNION ALL
+SELECT * FROM order_tam_eu@bd_eu);
+
+-- centralizata inclusa in reuniune
+(SELECT * FROM order_tam_exeu
+UNION ALL
+SELECT * FROM order_tam_eu@bd_eu)
+MINUS
+SELECT * FROM DWBI_miruna.order_tam;
+
+-- cum nu apare nicio linie in tabelele rezultat inseamna ca regula de reconstructie este respectata
+
+-- 3. Disjunctie
+SELECT * FROM order_tam_exeu
+INTERSECT
+SELECT * FROM order_tam_eu@bd_eu;
+-- cum nu apare nicio linie in tabelul rezultat inseamna ca regula de disjunctie este respectata
+
+--cum toate cele 3 reguli: completitudine, reconstructie, disjunctie sunt respectate, rezulta ca fragmentarea este corecta pentru ORDER_TAM
+
+
+-- ORDER_DETAIL
+-- 1. Completitudine
+
+SELECT * FROM DWBI_miruna.order_detail
+MINUS
+(SELECT o.*
+ FROM order_detail_exeu o, order_tam_exeu ot
+ WHERE o.id_order = ot.id_order
+ UNION ALL
+ SELECT o.*
+ FROM order_detail_eu@bd_eu o, order_tam_eu@bd_eu ot
+ WHERE o.id_order = ot.id_order);
+
+SELECT * FROM DWBI_miruna.order_detail
+MINUS
+(SELECT * FROM order_detail_exeu
+UNION ALL
+SELECT * FROM order_detail_eu@bd_eu);
+
+-- cum nu apare nicio linie in tabelele rezultat inseamna ca regula de completitudine este respectata
+
+-- 2. Reconstructia (baza de date centralizata = bd_exeu reunita cu bd_eu)
+
+-- reuniune inclusa in centralizata
+SELECT * FROM DWBI_miruna.order_detail
+MINUS
+(SELECT * FROM order_detail_exeu
+UNION ALL
+SELECT * FROM order_detail_eu@bd_eu);
+
+-- centralizata inclusa in reuniune
+(SELECT * FROM order_detail_exeu
+UNION ALL
+SELECT * FROM order_detail_eu@bd_eu)
+MINUS
+SELECT * FROM DWBI_miruna.order_detail;
+
+-- cum nu apare nicio linie in tabelele rezultat inseamna ca regula de reconstructie este respectata
+
+-- 3. Disjunctie
+SELECT * FROM order_detail_exeu
+INTERSECT
+SELECT * FROM order_detail_eu@bd_eu;
+-- cum nu apare nicio linie in tabelul rezultat inseamna ca regula de disjunctie este respectata
+
+--cum toate cele 3 reguli: completitudine, reconstructie, disjunctie sunt respectate, rezulta ca fragmentarea este corecta pentru ORDER_DETAIL
+
+--ASTFEL, se poate remarca faptul ca toate tabelele incluse in fragmentarea orizontala respecta cele 3 reguli, deci fragmentarea este corecta.
+
+
+
+--III. FRAGMENTAREA VERTICALA
+--exeu
+SELECT id_user, name, email, password
+FROM DWBI_miruna.USER_TAM;
+
+CREATE TABLE USER_TAM_EXEU
+AS
+SELECT id_user, name, email, password
+FROM DWBI_miruna.USER_TAM;
+select * from USER_TAM_EXEU;
+
+--global 
+--fragmentul cu date sensibile care ajunge in global
+SELECT id_user, accountcreationdate, is_deleted,gender, type
+FROM DWBI_miruna.USER_TAM;
+
+CREATE TABLE USER_TAM_GLOBAL
+AS
+SELECT id_user,is_deleted, accountcreationdate,gender, type
+FROM DWBI_miruna.USER_TAM;
+
+select * from USER_TAM_GLOBAL;
+
+--exeu
+-- VERIFICAREA CORECTITUDINII FRAGMENTARII VERTICALE
+--1. reconstructia
+SELECT user_e.*, user_g.accountcreationdate, user_g.is_deleted, user_g.gender, user_g.type
+FROM user_tam_exeu user_e, bdd_global.user_tam_global user_g
+WHERE user_e.id_user = user_g.id_user;
+
+select * from DWBI_miruna.USER_TAM;
+
+
+SELECT user_e.*, user_g.accountcreationdate, user_g.is_deleted, user_g.gender, user_g.type
+FROM user_tam_exeu user_e, bdd_global.user_tam_global user_g
+WHERE user_e.id_user = user_g.id_user
+minus
+select * from DWBI_miruna.USER_TAM;
+
+select * from DWBI_miruna.USER_TAM
+minus
+SELECT user_e.*, user_g.accountcreationdate, user_g.is_deleted, user_g.gender, user_g.type
+FROM user_tam_exeu user_e, bdd_global.user_tam_global user_g
+WHERE user_e.id_user = user_g.id_user;
+
+-- se observa ca rezultatele celor doua cereri sunt identice, deci regula de reconstructie este indeplinita
+
+--2. completitudinea
+SELECT *
+FROM DWBI_miruna.USER_TAM
+MINUS
+(
+SELECT user_e.*, user_g.accountcreationdate, user_g.is_deleted, user_g.gender, user_g.type
+FROM user_tam_exeu user_e, bdd_global.user_tam_global user_g
+WHERE user_e.id_user = user_g.id_user
+);
+
+-- rezultatul este un tabel fara nicio inregistrare ceea ce inseamna ca regula de completitiudine este indeplinita
+
+--3. Disjunctia, fiind replicat in bdd_global, pentru a verifica faptul ca nu
+--se intersecteaza coloanele se foloseste all_tab_columns
+SELECT column_name
+FROM user_tab_columns
+WHERE table_name = upper('USER_TAM_EXEU')
+      AND column_name <> 'ID_USER'
+    
+INTERSECT
+    
+SELECT column_name
+FROM all_tab_columns
+WHERE table_name = 'USER_TAM_GLOBAL'
+      AND column_name <> 'ID_USER';
+
+--  rezultatul este un tabel fara nicio inregistrare ceea ce inseamna ca regula de disjunctie este indeplinita
+
+--cum toate cele 3 regulile sunt indeplinite, atunci fragmentarea verticala este una corecta
+
+
+--4. Furnizarea formelor de transparență pentru întreg modelul ales
+--b transparență pentru fragmentele orizontale
+ --exeu
+-- acordarea drepturilor complete de utilizare a tabelelor acestei scheme de bdd_global
+GRANT ALL ON COUNTRY_EXEU TO bdd_global;
+GRANT ALL ON CITY_EXEU TO bdd_global;
+GRANT ALL ON ADDRESS_EXEU TO bdd_global;
+GRANT ALL ON ORDER_TAM_EXEU TO bdd_global;
+GRANT ALL ON ORDER_DETAIL_EXEU TO bdd_global;
+GRANT ALL ON USER_TAM_EXEU TO bdd_global;
+GRANT ALL ON REVIEW_EXEU TO bdd_global;
+GRANT ALL ON BOOK_EXEU TO bdd_global;
+
+--global
+
+--viziualizarea tabelelor la care are acces userul bdd_global din cele ale userului bdd din bd1
+select table_name
+from   all_tables
+where  owner = upper('bdd')
+and    table_name like upper('%_exeu');
+--Nu are acces la niciunul. Atunci se vor da drepturi complete de utilizare a tabelelor din bdd userului bdd_global
+--Dupa ce drepturile au fost date de userul bdd din bd1, bdd_global are acces la toate tabelele.
+
+-- ORIZONTALA PRIMARA
+--CREARE VIZUALIZARE PENTRU COUNTRY
+
+-- PREGATIRE
+-- afisarea tuturor tarilor atat din afara Europei cat si din Europa
+SELECT * FROM bdd.country_exeu;
+SELECT * FROM bdd.country_eu@bd_eu;
+SELECT * FROM country_eu@bd_eu;
+--
+
+CREATE OR REPLACE VIEW COUNTRY
+AS
+SELECT * FROM bdd.country_exeu
+UNION ALL
+SELECT * FROM bdd.country_eu@bd_eu;
+
+--
+SELECT * FROM COUNTRY;
+
+--verificarea coloanelor care permit propagarea operatiilor LMD asupra tabelelor de baza. 
+select COLUMN_NAME, UPDATABLE, INSERTABLE,DELETABLE
+from   user_updatable_columns
+where  table_name = upper('country');
+-- niciuna
+
+--CREAREA TRIGGERULUI DE PROPAGARE INSERT, UPDATE, DELETE
+
+--la inserare trebuie folosite cele doua secvente create pentru
+--inserarea in country_exeu, respectiv country_eu
+select sec_country_eu.nextval@bd_eu from dual;
+select bdd.sec_country_exeu.nextval from dual;
+
+CREATE OR REPLACE TRIGGER t_country 
+INSTEAD OF 
+INSERT OR DELETE OR UPDATE ON COUNTRY
+FOR EACH ROW
+BEGIN
+    IF INSERTING THEN
+      if :new.name IN ('Albania','Andora', 'Belarus','Belgia','Bosnia si Hertegovina','Cehia','Cipru','Croatia',
+        'Danemarca','Elvetia','Estonia','Finlanda','Franta', 'Germania', 'Grecia', 'Irlanda',
+        'Islanda', 'Italia', 'Letonia', 'Liechtenstein','Lituania', 'Luxemburg', 
+        'Macedonia', 'Malta', 'Republica Moldova','Monaco', 'Muntenegru', 'Norvegia', 
+        'Polonia','Portugalia', 'Romania', 'San Marino', 'Serbia','Slovacia','Slovenia','Spania','Suedia','Ucraina','Ungaria','Vatican') then
+         insert into COUNTRY_EU@bd_eu ( name) 
+          values ( :new.name);
+--         values (sec_country_eu.nextval@bd_eu, :new.name);
+         --values (:new.id_country, :new.name);
+      else
+         insert into bdd.COUNTRY_EXEU ( name) 
+          values ( :new.name);
+--         values (bdd.sec_country_exeu.nextval, :new.name);
+         --values (:new.id_country, :new.name);
+      end if;
+    ELSIF DELETING THEN
+        if :old.name IN ('Albania','Andora', 'Belarus','Belgia','Bosnia si Hertegovina','Cehia','Cipru','Croatia',
+        'Danemarca','Elvetia','Estonia','Finlanda','Franta', 'Germania', 'Grecia', 'Irlanda',
+        'Islanda', 'Italia', 'Letonia', 'Liechtenstein','Lituania', 'Luxemburg', 
+        'Macedonia', 'Malta', 'Republica Moldova','Monaco', 'Muntenegru', 'Norvegia', 
+        'Polonia','Portugalia', 'Romania', 'San Marino', 'Serbia','Slovacia','Slovenia','Spania','Suedia','Ucraina','Ungaria','Vatican') then
+            delete from COUNTRY_EU@bd_eu
+            where id_country = :old.id_country;
+        else
+            delete from bdd.COUNTRY_EXEU
+            where id_country = :old.id_country;
+        end if;
+    ELSIF UPDATING('name') THEN
+    IF :new.name IN ('Albania','Andora', 'Belarus','Belgia','Bosnia si Hertegovina','Cehia','Cipru','Croatia',
+        'Danemarca','Elvetia','Estonia','Finlanda','Franta', 'Germania', 'Grecia', 'Irlanda',
+        'Islanda', 'Italia', 'Letonia', 'Liechtenstein','Lituania', 'Luxemburg', 
+        'Macedonia', 'Malta', 'Republica Moldova','Monaco', 'Muntenegru', 'Norvegia', 
+        'Polonia','Portugalia', 'Romania', 'San Marino', 'Serbia','Slovacia','Slovenia','Spania','Suedia','Ucraina','Ungaria','Vatican') --NUME NOU NU E DIN EUROPA
+        AND :old.name IN ('Albania','Andora', 'Belarus','Belgia','Bosnia si Hertegovina','Cehia','Cipru','Croatia',
+        'Danemarca','Elvetia','Estonia','Finlanda','Franta', 'Germania', 'Grecia', 'Irlanda',
+        'Islanda', 'Italia', 'Letonia', 'Liechtenstein','Lituania', 'Luxemburg', 
+        'Macedonia', 'Malta', 'Republica Moldova','Monaco', 'Muntenegru', 'Norvegia', 
+        'Polonia','Portugalia', 'Romania', 'San Marino', 'Serbia','Slovacia','Slovenia','Spania','Suedia','Ucraina','Ungaria','Vatican') 
+        then
+            update COUNTRY_EU@bd_eu
+            set name = :new.name
+            where id_country = :old.id_country;
+        ELSIF :new.name NOT IN ('Albania','Andora', 'Belarus','Belgia','Bosnia si Hertegovina','Cehia','Cipru','Croatia',
+        'Danemarca','Elvetia','Estonia','Finlanda','Franta', 'Germania', 'Grecia', 'Irlanda',
+        'Islanda', 'Italia', 'Letonia', 'Liechtenstein','Lituania', 'Luxemburg', 
+        'Macedonia', 'Malta', 'Republica Moldova','Monaco', 'Muntenegru', 'Norvegia', 
+        'Polonia','Portugalia', 'Romania', 'San Marino', 'Serbia','Slovacia','Slovenia','Spania','Suedia','Ucraina','Ungaria','Vatican') --NUME NOU NU E DIN EUROPA
+        AND :old.name NOT IN ('Albania','Andora', 'Belarus','Belgia','Bosnia si Hertegovina','Cehia','Cipru','Croatia',
+        'Danemarca','Elvetia','Estonia','Finlanda','Franta', 'Germania', 'Grecia', 'Irlanda',
+        'Islanda', 'Italia', 'Letonia', 'Liechtenstein','Lituania', 'Luxemburg', 
+        'Macedonia', 'Malta', 'Republica Moldova','Monaco', 'Muntenegru', 'Norvegia', 
+        'Polonia','Portugalia', 'Romania', 'San Marino', 'Serbia','Slovacia','Slovenia','Spania','Suedia','Ucraina','Ungaria','Vatican') 
+        then --NOUL SI VECHIUL NUME SUNT DIN EXEUROPA
+            update bdd.COUNTRY_EXEU
+            set name = :new.name
+            where id_country = :old.id_country;
+        end if;
+    end if;
+ END;
+/
+
+--verificare
+insert into country (name) values('Albania');
+COMMIT;
+SELECT * FROM bdd.country_eu@bd_eu;
+SELECT * FROM bdd.country_exeu;
+SELECT * FROM COUNTRY;
+
+insert into country (name) values('China');
+COMMIT;
+SELECT * FROM bdd.country_exeu;
+
+
+--tot in europa 
+UPDATE country
+SET NAME = 'Andora'
+WHERE id_country = 1;
+commit;
+SELECT * FROM bdd.country_eu@bd_eu;
+
+--trebuie sa dea eroare pentru ca se incalca constrangerea de unicitate pentru nume
+--UPDATE country
+--SET NAME = 'Turcia'
+--WHERE id_country = 54;
+
+UPDATE country
+SET NAME = 'Japonia'
+WHERE id_country = 54;
+commit;
+SELECT * FROM bdd.country_exeu;
+
+--
+DELETE FROM COUNTRY
+WHERE id_country = 51;
+commit;
+SELECT * FROM bdd.country_eu@bd_eu;
+
+DELETE FROM COUNTRY
+WHERE id_country = 54;
+commit;
+SELECT * FROM bdd.country_exeu;
+
+-- deja exista SUA
+--insert into country (name) values('SUA');
+--
+
+-- fragmentare orizontala derivata
+
+-- 1. CITY
+--CREARE VIZUALIZARE PENTRU CITY
+
+-- PREGATIRE
+-- afisarea tuturor oraselor atat din afara Europei cat si din Europa
+SELECT * FROM bdd.city_exeu;
+SELECT * FROM bdd.city_eu@bd_eu;
+--
+
+CREATE OR REPLACE VIEW CITY
+AS
+SELECT * FROM bdd.city_exeu
+UNION ALL
+SELECT * FROM bdd.city_eu@bd_eu;
+
+--
+
+
+SELECT * FROM CITY;
+/
+CREATE OR REPLACE TRIGGER t_city
+INSTEAD OF 
+INSERT OR DELETE OR UPDATE ON CITY
+FOR EACH ROW
+DECLARE
+    v_count NUMBER;
+BEGIN
+    IF INSERTING THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.country_eu@bd_eu
+        WHERE id_country = :NEW.id_country;
+        
+        if v_count > 0 then 
+            insert into CITY_EU@bd_eu (name, id_country)
+            values (:new.name, :new.id_country);
+--            values (:new.id_city, :new.name, :new.id_country);
+        else
+            insert into bdd.CITY_EXEU (name, id_country)
+            values (:new.name, :new.id_country);
+--            values (:new.id_city, :new.name, :new.id_country);
+        end if;
+      
+    ELSIF DELETING THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.country_eu@bd_eu
+        WHERE id_country = :OLD.id_country;
+        
+        if v_count > 0 then 
+            delete from CITY_EU@bd_eu
+            where id_city = :old.id_city;
+        else
+            delete from bdd.CITY_EXEU
+             where id_city = :old.id_city;
+        end if;
+    
+    ELSIF UPDATING('name') THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.country_eu@bd_eu
+        WHERE id_country = :old.id_country;
+      
+        if v_count > 0 then 
+            update bdd.CITY_EU@bd_eu
+            set name = :new.name
+            where id_city = :old.id_city;
+        else
+            update bdd.CITY_EXEU
+            set name = :new.name
+            where id_city = :old.id_city;
+        end if;
+    END IF;
+END;
+/
+
+--verificare
+select * from country;
+select * from city;
+
+insert into city (name,id_country) values('Bihor',1);
+COMMIT;
+
+SELECT * FROM bdd.city_eu@bd_eu;
+SELECT * FROM CITY;
+
+insert into city (name,id_country) values('Texas',7);
+COMMIT;
+SELECT * FROM bdd.city_exeu;
+--
+UPDATE city
+SET NAME = 'Bihorul'
+WHERE id_city = 91;
+commit;
+SELECT * FROM bdd.city_eu@bd_eu;
+
+UPDATE city
+SET NAME = 'Texaas'
+WHERE id_city = 90;
+commit;
+SELECT * FROM bdd.city_exeu;
+--
+DELETE FROM city
+WHERE id_city = 91;
+commit;
+SELECT * FROM bdd.city_eu@bd_eu;
+ 
+DELETE FROM city
+WHERE id_city = 90;
+commit;
+SELECT * FROM bdd.city_exeu;
+
+--2  ADDRESS
+--CREARE VIZUALIZARE PENTRU ADDRESS
+
+-- PREGATIRE
+-- afisarea tuturor adreselor atat din afara Europei cat si din Europa
+SELECT * FROM bdd.address_exeu;
+SELECT * FROM bdd.address_eu@bd_eu;
+--
+
+CREATE OR REPLACE VIEW ADDRESS
+AS
+SELECT * FROM bdd.address_exeu
+UNION ALL
+SELECT * FROM bdd.address_eu@bd_eu;
+
+select * from address;
+    
+/
+CREATE OR REPLACE TRIGGER t_address
+INSTEAD OF 
+INSERT OR DELETE OR UPDATE ON ADDRESS
+FOR EACH ROW
+DECLARE
+    v_count NUMBER;
+BEGIN
+    IF INSERTING THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.city_eu@bd_eu
+        WHERE id_city = :NEW.id_city;
+        
+        if v_count > 0 then 
+            insert into bdd.address_eu@bd_eu (street, block, id_city, id_user)
+            values (:new.street, :new.block, :new.id_city, :new.id_user);
+        else
+            insert into bdd.address_exeu (street, block, id_city, id_user)
+            values (:new.street, :new.block, :new.id_city, :new.id_user);
+        end if;
+      
+    ELSIF DELETING THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.city_eu@bd_eu
+        WHERE id_city = :OLD.id_city;
+        
+        if v_count > 0 then 
+            delete from bdd.address_eu@bd_eu
+            where id_address = :old.id_address;
+        else
+            delete from bdd.address_exeu
+            where id_address = :old.id_address;
+        end if;
+    
+    ELSIF UPDATING('street')OR UPDATING('block') THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.city_eu@bd_eu
+        WHERE id_city = :OLD.id_city;
+      
+        if v_count > 0 then 
+            update bdd.address_eu@bd_eu
+            set street = :new.street,
+            block = :new.block
+            where id_address = :old.id_address;
+        else
+            update bdd.address_exeu
+            set street = :new.street,
+            block = :new.block
+            where id_address = :old.id_address;
+        end if;
+    END IF;
+END;
+/
+
+--verificare
+select * from city; --id 11 e Eu, 27 exeu
+select * from address;
+
+insert into address (street, block, id_city, id_user)
+values ('street test','Bloc Test',11,11);
+commit;
+select * from address;
+select * from bdd.address@bd_eu;
+
+insert into address (street, block, id_city, id_user)
+values ('street test','Bloc Test',27,11);
+commit;
+select * from bdd.address_exeu;
+
+--
+update address
+set street = 'Street test1', block = 'Block Test1'
+where id_address = 47;
+commit;
+select * from address;
+select * from bdd.address@bd_eu;
+
+update address
+set street = 'Street test2', block = 'Block Test2'
+where id_address = 48;
+select * from bdd.address_exeu;
+commit;
+--
+delete from address
+where id_address = 47;
+commit;
+select * from bdd.address@bd_eu;
+
+delete from address
+where id_address = 48;
+commit;
+select * from bdd.address_exeu;
+
+
+--3. order_tam
+-- PREGATIRE
+-- afisarea tuturor comenzilor atat din afara Europei cat si din Europa
+SELECT * FROM bdd.order_tam_exeu;
+SELECT * FROM bdd.order_tam_eu@bd_eu;
+--
+
+CREATE OR REPLACE VIEW ORDER_TAM
+AS
+SELECT * FROM bdd.order_tam_exeu
+UNION ALL
+SELECT * FROM bdd.order_tam_eu@bd_eu;
+
+select * from ORDER_TAM;
+
+
+/
+CREATE OR REPLACE TRIGGER t_order_tam
+INSTEAD OF 
+INSERT OR DELETE OR UPDATE ON ORDER_TAM
+FOR EACH ROW
+DECLARE
+    v_count NUMBER;
+BEGIN
+    IF INSERTING THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.address_eu@bd_eu
+        WHERE id_address = :NEW.id_address;
+        
+        if v_count > 0 then 
+            insert into bdd.order_tam_eu@bd_eu (id_user, order_date, total_price, status, id_address)
+            VALUES (:new.id_user, SYSDATE, 0, 'Pending',  :new.id_address);
+--            values (:new.id_user, :new.order_date, :new.total_price, :new.status, :new.id_address);
+        else
+            insert into bdd.order_tam_exeu (id_user, order_date, total_price, status, id_address)
+             VALUES (:new.id_user, SYSDATE, 0, 'Pending',  :new.id_address);
+            --values (:new.id_user, :new.order_date, :new.total_price, :new.status, :new.id_address);
+        end if;
+      
+    ELSIF DELETING THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.address_eu@bd_eu
+        WHERE id_address = :OLD.id_address;
+        
+        if v_count > 0 then 
+            delete from bdd.order_tam_eu@bd_eu
+            where id_order = :old.id_order;
+        else
+            delete from bdd.order_tam_exeu
+            where id_order = :old.id_order;
+        end if;
+    
+    ELSIF UPDATING('status') THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.address_eu@bd_eu
+        WHERE id_address = :OLD.id_address;
+      
+        if v_count > 0 then 
+            update bdd.order_tam_eu@bd_eu
+            set status = :new.status
+            where id_order = :old.id_order;
+        else
+            update bdd.order_tam_exeu
+            set status = :new.status
+            where id_order = :old.id_order;
+        end if;
+        
+    ELSIF UPDATING('total_price') THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.address_eu@bd_eu
+        WHERE id_address = :OLD.id_address;
+      
+        if v_count > 0 then 
+            update bdd.order_tam_eu@bd_eu
+            set total_price = :new.total_price
+            where id_order = :old.id_order;
+        else
+            update bdd.order_tam_exeu
+            set total_price = :new.total_price
+            where id_order = :old.id_order;
+        end if;
+        
+    END IF;
+END;
+/
+
+--verificare
+
+select * from ORDER_TAM;
+SELECT * FROM ADDRESS; --ID_ADDRESS 19 - EXEU, 1 - EU
+SELECT * FROM CITY_EU;
+
+--insert
+insert into order_tam (id_user,order_date,total_price,status,id_address)
+values (1,SYSDATE,0,'Pending',1); --eu
+commit;
+SELECT * FROM bdd.order_tam_eu@bd_eu; 
+
+
+insert into order_tam (id_user,order_date,total_price,status,id_address)
+values (19,SYSDATE,0,'Pending',19); --exeu
+commit;
+SELECT * FROM bdd.order_tam_exeu; 
+
+--update
+update order_tam
+set status = 'Completed'
+where id_order = 179;
+commit;
+SELECT * FROM bdd.order_tam_eu@bd_eu; 
+
+update order_tam
+set total_price = 200.52
+where id_order = 181;
+commit;
+SELECT * FROM bdd.order_tam_eu@bd_eu; 
+
+--exeu
+
+update order_tam
+set status = 'Completed'
+where id_order = 176;
+commit;
+SELECT * FROM bdd.order_tam_exeu; 
+
+update order_tam
+set total_price = 300
+where id_order = 178;
+commit;
+SELECT * FROM bdd.order_tam_exeu; 
+
+--delete
+delete from order_tam
+where id_order = 179;
+commit;
+SELECT * FROM bdd.order_tam_eu@bd_eu;
+
+delete from order_tam
+where id_order = 181;
+commit;
+SELECT * FROM bdd.order_tam_eu@bd_eu;
+
+
+delete from order_tam
+where id_order = 176;
+commit;
+SELECT * FROM bdd.order_tam_exeu; 
+
+delete from order_tam
+where id_order = 178;
+commit;
+SELECT * FROM bdd.order_tam_exeu; 
+--4. ORDER_DETAIL
+
+-- PREGATIRE
+-- afisarea tuturor ORDER_DETAIL atat din afara Europei cat si din Europa
+SELECT * FROM bdd.order_detail_exeu;
+SELECT * FROM bdd.order_detail_eu@bd_eu;
+--
+
+CREATE OR REPLACE VIEW ORDER_DETAIL
+AS
+SELECT * FROM bdd.order_detail_exeu
+UNION ALL
+SELECT * FROM bdd.order_detail_eu@bd_eu;
+
+select * from ORDER_DETAIL;
+
+
+/
+CREATE OR REPLACE TRIGGER t_order_detail
+INSTEAD OF 
+INSERT OR DELETE OR UPDATE ON ORDER_DETAIL
+FOR EACH ROW
+DECLARE
+    v_count NUMBER;
+BEGIN
+    IF INSERTING THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.order_tam_eu@bd_eu
+        WHERE id_order = :NEW.id_order;
+        
+        if v_count > 0 then 
+            insert into bdd.order_detail_eu@bd_eu
+            values (:new.id_order, :new.id_book, :new.quantity, :new.price, :new.discount);
+        else
+            insert into bdd.order_detail_exeu
+            values (:new.id_order, :new.id_book, :new.quantity, :new.price, :new.discount);
+        end if;
+        
+    ELSIF UPDATING('quantity') THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.order_tam_eu@bd_eu
+        WHERE id_order = :NEW.id_order;
+      
+        if v_count > 0 then 
+            update bdd.order_detail_eu@bd_eu
+            set quantity = :new.quantity
+            where id_order = :old.id_order and id_book=:old.id_book;
+        else
+            update bdd.order_detail_exeu
+            set quantity = :new.quantity
+            where id_order = :old.id_order and id_book=:old.id_book;
+        end if;
+        
+    ELSIF DELETING THEN
+        SELECT COUNT(*) INTO v_count
+        FROM bdd.order_tam_eu@bd_eu
+        WHERE id_order = :OLD.id_order;
+        
+        if v_count > 0 then 
+            delete from bdd.order_detail_eu@bd_eu
+            where id_order = :old.id_order and id_book = :old.id_book;
+        else
+            delete from bdd.order_detail_exeu
+            where id_order = :old.id_order and id_book = :old.id_book;
+        end if;
+    END IF;
+END;
+/
+
+--VERIFICARE
+
+--insert
+--eu
+insert into order_tam (id_user,order_date,total_price,status,id_address)
+values (1,SYSDATE,100.00,'Shipped',1); --eu
+commit;
+SELECT * FROM bdd.order_tam_eu@bd_eu; 
+
+INSERT INTO ORDER_DETAIL VALUES(175,589,2,84.21,0);
+commit;
+SELECT * FROM bdd.order_detail_eu@bd_eu;
+
+--exeu
+insert into order_tam (id_user,order_date,total_price,status,id_address)
+values (19,SYSDATE,100.00,'Shipped',19); --exeu
+commit;
+SELECT * FROM bdd.order_tam_exeu; 
+
+INSERT INTO ORDER_DETAIL VALUES(174,589,2,84.21,0);
+commit;
+SELECT * FROM bdd.order_detail_exeu;
+
+
+--update
+--eu
+update order_detail
+set quantity = 3
+where id_order = 175 and id_book = 589;
+commit;
+SELECT * FROM bdd.order_detail_eu@bd_eu;
+
+--exeu
+update order_detail
+set quantity = 3
+where id_order = 174 and id_book = 589;
+commit;
+SELECT * FROM bdd.order_detail_exeu;
+
+
+--delete
+delete from order_detail
+where id_order = 175 and id_book = 589;
+commit;
+SELECT * FROM bdd.order_detail_eu@bd_eu;
+
+delete from order_tam
+where id_order = 175;
+commit;
+SELECT * FROM bdd.order_tam_eu@bd_eu;
+
+--exeu
+delete from order_detail
+where id_order = 174 and id_book = 589;
+commit;
+SELECT * FROM bdd.order_detail_exeu;
+
+delete from order_tam
+where id_order = 174;
+commit;
+SELECT * FROM bdd.order_tam_exeu;
+
+
+
+
+--a. transparență pentru fragmentele verticale 
+
+--4.a VERTICAL
+
+CREATE OR REPLACE VIEW USER_TAM
+AS
+SELECT ex.id_user, name, email, password,accountcreationdate, is_deleted,gender, type
+FROM bdd.user_tam_exeu ex, user_tam_global g
+WHERE ex.id_user = g.id_user;
+
+select * from user_tam;
+
+select COLUMN_NAME, UPDATABLE, INSERTABLE,DELETABLE
+from   user_updatable_columns
+where  table_name = upper('user_tam');
+/
+CREATE OR REPLACE TRIGGER t_user_tam
+INSTEAD OF
+INSERT OR DELETE OR UPDATE ON USER_TAM
+FOR EACH ROW
+DECLARE
+    v_id_user NUMBER;
+BEGIN
+--la insert se va face insert si pe user_tam_eu si user_tam_exeu in acelasi moment si insert si in user_tam_global
+--la update si delete la fel
+    IF INSERTING THEN
+    
+        SELECT bdd.sec_user_tam_exeu.nextval INTO v_id_user FROM dual;
+        
+        INSERT INTO bdd.user_tam_exeu (id_user, name,email,password)
+        VALUES (v_id_user,:new.name, :new.email, :new.password);
+        
+        INSERT INTO bdd.user_tam_eu@bd_eu (id_user, name,email,password)
+        VALUES (v_id_user,:new.name, :new.email, :new.password);
+        
+        INSERT INTO user_tam_global (id_user,is_deleted,accountcreationdate,gender,type)
+        VALUES (v_id_user, 0, SYSDATE, :new.gender, :new.type);
+    
+    ELSIF UPDATING('name') THEN
+        update bdd.user_tam_exeu
+        set name = :new.name
+        where id_user = :old.id_user;
+        
+        update bdd.user_tam_eu@bd_eu
+        set name = :new.name
+        where id_user = :old.id_user;
+        
+    ELSIF UPDATING('is_deleted') THEN --asta inseamna stergerea pentru noi pentru ca noi il lasam in bd doar modificam is_deleted
+        update user_tam_global
+        set is_deleted = :new.is_deleted
+        where id_user = :old.id_user;
+        
+    ELSIF DELETING THEN --dar noi nu stergem niciodata un user de tot
+        delete from bdd.user_tam_exeu
+        where id_user = :old.id_user;
+        
+        delete from bdd.user_tam_eu@bd_eu
+        where id_user = :old.id_user;
+        
+        delete from user_tam_global
+        where id_user = :old.id_user;
+    
+    END IF;
+END;
+/
+    
+--Verificare
+
+--trebuie sa dea eroare pentru ca type nu este una din valorile Persoana fizica sau Persoana juridica
+insert into user_tam (name,email,password,gender,type)
+values ('NAME','EMAIL','PASS','F','Persoana'); 
+
+
+--trebuie sa dea eroare pentru ca gender nu are valoarea valida (trebuie sa fie M sau F)
+insert into user_tam (name,email,password,gender,type)
+values ('NAME','EMAIL','PASS','Fi','Persoana fizica'); 
+
+--trebuie sa dea eroare de unicitate pentru email
+insert into user_tam (name,email,password,gender,type)
+values ('NAME','tali@yahoo.com','PASS','F','Persoana fizica'); 
+
+--inserare buna
+insert into user_tam (name,email,password,gender,type)
+values ('NAME','email@yahoo.com','PASS','F','Persoana fizica'); 
+commit;
+
+select * from user_tam_global;
+select * from user_tam_exeu;
+select * from user_tam_eu;
+select * from user_tam;
+
+--update
+update user_tam
+set name='NAME_2'
+where id_user = 50;
+commit;
+
+select * from user_tam_exeu;
+select * from user_tam_eu;
+select * from user_tam;
+
+update user_tam
+set is_deleted=1
+where id_user = 50;
+commit;
+
+select * from user_tam_global;
+select * from user_tam;
+
+--delete
+delete from user_tam
+where id_user = 50;
+commit;
+
+select * from user_tam_global;
+select * from user_tam_exeu;
+select * from user_tam_eu;
+select * from user_tam;
+
+
+
+
+--c. transparență pentru tabelele stocate în altă bază de date față de cea la care se conectează aplicația 
+
+--eu
+-- transparenta pentru tabelele stocate in alta baza de date fata de cea la care se conecteaza aplicatia
+-- sinonim pentru fragmentul vertical al user_tam din bd1 din schema utilizatorului bdd_global.
+CREATE OR REPLACE SYNONYM user_tam_global FOR bdd_global.user_tam_global@bd_exeu;
+select * from bdd_global.user_tam_global@bd_exeu;
+select * from user_tam_global;
+
+--global
+--4. C. transparenta  pentru tabelele stocate în alta baza de date fata de cea la care se conecteaza aplicatia
+--user_tam
+create or replace synonym user_tam_eu for user_tam_eu@bd_eu;
+select * from user_tam_eu;
+select * from user_tam_eu@bd_eu;
+
+
+
+--exeu
+--4.C. 
+-- crearea de sinonime pentru tabelele din baza de date distanta bd2.
+CREATE OR REPLACE SYNONYM country_eu FOR country_eu@bd_eu;
+select * from country_eu;
+select * from country_eu@bd_eu;
+
+CREATE OR REPLACE SYNONYM city_eu FOR city_eu@bd_eu;
+select * from city_eu@bd_eu;
+select * from city_eu;
+
+CREATE OR REPLACE SYNONYM address_eu FOR address_eu@bd_eu;
+select * from address_eu@bd_eu;
+select * from address_eu;
+
+CREATE OR REPLACE SYNONYM order_tam_eu FOR order_tam_eu@bd_eu;
+select * from order_tam_eu@bd_eu;
+select * from order_tam_eu;
+
+CREATE OR REPLACE SYNONYM order_detail_eu FOR order_detail_eu@bd_eu;
+select * from order_detail_eu@bd_eu;
+select * from order_detail_eu;
+
+CREATE OR REPLACE SYNONYM review_eu FOR review_eu@bd_eu;
+select * from review_eu@bd_eu;
+select * from review_eu;
+
+CREATE OR REPLACE SYNONYM book_eu FOR book_eu@bd_eu;
+select * from book_eu@bd_eu;
+select * from book_eu;
+
+CREATE OR REPLACE SYNONYM user_tam_eu FOR user_tam_eu@bd_eu;
+select * from user_tam_eu@bd_eu;
+select * from user_tam_eu;
+
+
+
+--crearea de sinonime pentru tabelele din aceasta schema pentru a usura scrierea
+CREATE OR REPLACE SYNONYM country FOR country_exeu;
+select * from country_exeu;
+select * from country;
+
+CREATE OR REPLACE SYNONYM city FOR city_exeu;
+select * from city_exeu;
+select * from city;
+
+CREATE OR REPLACE SYNONYM address FOR address_exeu;
+select * from address_exeu;
+select * from address;
+
+CREATE OR REPLACE SYNONYM order_tam FOR order_tam_exeu;
+select * from order_tam_exeu;
+select * from order_tam;
+
+CREATE OR REPLACE SYNONYM order_detail FOR order_detail_exeu;
+select * from order_detail_exeu;
+select * from order_detail;
+
+CREATE OR REPLACE SYNONYM user_tam FOR user_tam_exeu;
+select * from user_tam_exeu;
+select * from user_tam;
+
+CREATE OR REPLACE SYNONYM review FOR review_exeu;
+select * from review_exeu;
+select * from review;
+
+CREATE OR REPLACE SYNONYM book FOR book_exeu;
+select * from book_exeu;
+select * from book;
+
+--eu
+
+--crearea de sinonime pentru tabelele din aceasta schema pentru a usura scrierea
+CREATE OR REPLACE SYNONYM country FOR country_eu;
+select * from country_eu;
+select * from country;
+
+CREATE OR REPLACE SYNONYM city FOR city_eu;
+select * from city_eu;
+select * from city;
+
+CREATE OR REPLACE SYNONYM address FOR address_eu;
+select * from address_eu;
+select * from address;
+
+CREATE OR REPLACE SYNONYM order_tam FOR order_tam_eu;
+select * from order_tam_eu;
+select * from order_tam;
+
+CREATE OR REPLACE SYNONYM order_detail FOR order_detail_eu;
+select * from order_detail_eu;
+select * from order_detail;
+
+CREATE OR REPLACE SYNONYM review FOR review_eu;
+select * from review_eu;
+select * from review;
+
+CREATE OR REPLACE SYNONYM book FOR book_eu;
+select * from book_eu;
+select * from book;
+
+-- crearea de sinonime pentru tabelele din baza de date bd1.
+CREATE OR REPLACE SYNONYM country_exeu FOR country_exeu@bd_exeu;
+select * from country_exeu@bd_exeu;
+select * from country_exeu;
+
+CREATE OR REPLACE SYNONYM city_exeu FOR city_exeu@bd_exeu;
+select * from city_exeu@bd_exeu;
+select * from city_exeu;
+
+CREATE OR REPLACE SYNONYM address_exeu FOR address_exeu@bd_exeu;
+select * from address_exeu@bd_exeu;
+select * from address_exeu;
+
+CREATE OR REPLACE SYNONYM order_tam_exeu FOR order_tam_exeu@bd_exeu;
+select * from order_tam_exeu@bd_exeu;
+select * from order_tam_exeu;
+
+CREATE OR REPLACE SYNONYM order_detail_exeu FOR order_detail_exeu@bd_exeu;
+select * from order_detail_exeu@bd_exeu;
+select * from order_detail_exeu;
+
+CREATE OR REPLACE SYNONYM user_tam_exeu FOR user_tam_exeu@bd_exeu;
+select * from user_tam_exeu@bd_exeu;
+select * from user_tam_exeu;
+
+CREATE OR REPLACE SYNONYM review_exeu FOR review_exeu@bd_exeu;
+select * from review_exeu@bd_exeu;
+select * from review_exeu;
+
+CREATE OR REPLACE SYNONYM book_exeu FOR book_exeu@bd_exeu;
+select * from book_exeu@bd_exeu;
+select * from book_exeu;
+
+--global
+
+--crearea de sinonime pentru tabelele care provin din europa (din baza de date 2) 
+--si exeuropa (din aceeasi baza de date cu schema global)
+--user_tam
+create or replace synonym user_tam_exeu for bdd.user_tam_exeu;
+select * from user_tam_exeu;
+select * from bdd.user_tam_exeu;
+--country
+create or replace synonym country_eu for country_eu@bd_eu;
+select * from country_eu@bd_eu;
+select * from country_eu;
+
+create or replace synonym country_exeu for bdd.country_exeu;
+select * from bdd.country_exeu;
+select * from country_exeu;
+
+--city
+create or replace synonym city_eu for city_eu@bd_eu;
+select * from city_eu@bd_eu;
+select * from city_eu;
+
+create or replace synonym city_exeu for bdd.city_exeu;
+select * from bdd.city_exeu;
+select * from city_exeu;
+
+--address
+create or replace synonym address_eu for address_eu@bd_eu;
+select * from address_eu@bd_eu;
+select * from address_eu;
+
+create or replace synonym address_exeu for bdd.address_exeu;
+select * from bdd.address_exeu;
+select * from address_exeu;
+
+--order_tam
+create or replace synonym order_tam_eu for order_tam_eu@bd_eu;
+select * from order_tam_eu@bd_eu;
+select * from order_tam_eu;
+
+create or replace synonym order_tam_exeu for bdd.order_tam_exeu;
+select * from bdd.order_tam_exeu;
+select * from order_tam_exeu;
+
+--order_detail
+create or replace synonym order_detail_eu for order_detail_eu@bd_eu;
+select * from order_detail_eu@bd_eu;
+select * from order_detail_eu;
+
+create or replace synonym order_detail_exeu for bdd.order_detail_exeu;
+select * from bdd.order_detail_exeu;
+select * from order_detail_exeu;
+-- sinonime pentru tabelele replicate
+--review
+create or replace synonym review_eu for review_eu@bd_eu;
+select * from review_eu@bd_eu;
+select * from review_eu;
+
+create or replace synonym review_exeu for bdd.review_exeu;
+select * from bdd.review_exeu;
+select * from review_exeu;
+--book
+create or replace synonym book_eu for book_eu@bd_eu;
+select * from book_eu@bd_eu;
+select * from book_eu;
+
+create or replace synonym book_exeu for bdd.book_exeu;
+select * from bdd.book_exeu;
+select * from book_exeu;
+
+
+--5 Asigurarea sincronizării datelor pentru relațiile replicate
+--exeu
+--5. REPLICARE BOOK, REVIEW
+CREATE TABLE BOOK_EXEU
+AS
+SELECT * FROM DWBI_miruna.book;
+
+select * from book_exeu;
+
+CREATE TABLE REVIEW_EXEU
+AS
+SELECT * FROM DWBI_miruna.review;
+
+select * from REVIEW_EXEU;
+
+--eu
+--5. REPLICARE BOOK, REVIEW
+CREATE TABLE BOOK_EU
+AS
+SELECT * FROM DWBI_miruna.book@bd_exeu;
+
+select * from book_eu;
+
+
+CREATE TABLE REVIEW_EU
+AS
+SELECT * FROM DWBI_miruna.review@bd_exeu;
+
+select * from review_eu;
+
+
+CREATE TABLE USER_TAM_EU
+AS
+SELECT *
+FROM USER_TAM_EXEU@bd_exeu;
+
+SELECT * FROM USER_TAM_EU;
+
+--exeu
+--5. REPLICARE BOOK, REVIEW
+CREATE TABLE BOOK_EXEU
+AS
+SELECT * FROM DWBI_miruna.book;
+
+select * from book_exeu;
+
+CREATE TABLE REVIEW_EXEU
+AS
+SELECT * FROM DWBI_miruna.review;
+
+select * from REVIEW_EXEU;
+
+--trigger sincronizare BOOK
+select * from book;
+
+CREATE OR REPLACE TRIGGER trig_rep_exeu_book 
+--AFTER INSERT OR DELETE OR UPDATE OF price, stock_status ON BOOK_EXEU 
+AFTER INSERT OR DELETE OR UPDATE ON BOOK_EXEU 
+FOR EACH ROW 
+BEGIN 
+IF INSERTING  THEN
+  INSERT INTO BOOK_EU@bd_eu 
+  VALUES(:NEW.id_book,:NEW.name,:NEW.price,:NEW.stock_status,:NEW.year,:NEW.description,:NEW.id_publisher,:NEW.id_category,:NEW.id_author,:NEW.id_serie);  
+ELSIF deleting THEN
+   DELETE FROM  BOOK_EU@bd_eu
+   WHERE id_book = :old.id_book;
+   
+ELSIF updating('price') then
+   UPDATE BOOK_EU@bd_eu
+   SET price = :new.price
+   WHERE id_book = :old.id_book;
+
+ELSIF updating('stock_status') then
+   UPDATE BOOK_EU@bd_eu
+   SET stock_status = :new.stock_status
+   WHERE id_book = :old.id_book; 
+   
+END IF;  
+END;
+/
+
+--verificare
+--insert
+insert into book(name,price,stock_status,year,description,id_publisher,id_category,id_author,id_serie)
+values ('EXEU BOOK',10.00,100,2022,'exeu book desc',65,61,321,81); --id = 1023, 1026
+commit;
+select * from book;
+select * from book_eu;
+
+--update
+update book
+set price = 15.5
+where id_book = 1023;
+commit;
+select * from book;
+select * from book_eu;
+
+update book
+set stock_status = 50
+where id_book = 1026;
+commit;
+select * from book;
+select * from book_eu;
+--delete
+delete from book
+where id_book = 1023;
+commit;
+
+delete from book
+where id_book = 1026;
+commit;
+
+select * from book;
+select * from book_eu;
+
+
+-- TRIGGER SINCRONIZARE REVIEW
+SELECT * FROM REVIEW;
+
+CREATE OR REPLACE TRIGGER trig_rep_exeu_review 
+AFTER INSERT OR DELETE OR UPDATE OF review_comment,rating ON REVIEW_EXEU 
+FOR EACH ROW 
+BEGIN 
+IF INSERTING THEN
+  INSERT INTO REVIEW_EU@bd_eu 
+  VALUES(:NEW.review_date,:NEW.id_user,:NEW.id_book,:NEW.rating,:NEW.review_comment);  
+ELSIF deleting THEN
+   DELETE FROM  REVIEW_EU@bd_eu
+   WHERE review_date = :old.review_date AND id_user = :old.id_user and id_book = :old.id_book;
+ELSE
+   UPDATE REVIEW_EU@bd_eu
+   SET review_comment = :new.review_comment,
+       rating = :new.rating
+   WHERE review_date = :old.review_date AND id_user = :old.id_user and id_book = :old.id_book;
+END IF;  
+END;
+/
+--verificare
+--insert
+INSERT INTO review_exeu values (sysdate,6,2,2,'La a doua citire nu mi-a mai placut');
+commit;
+
+SELECT * FROM REVIEW;
+select * from review_eu;
+
+--update
+update review_exeu
+set review_comment = 'Citirea 2', rating = 3
+where id_user = 6 and id_book  = 2 and TRUNC(review_date) = TRUNC(SYSDATE);
+commit;
+
+SELECT * FROM REVIEW;
+select * from review_eu;
+
+--delete
+delete from review_exeu
+where id_user = 6 and id_book  = 2 and TRUNC(review_date) = TRUNC(SYSDATE);
+commit;
+
+SELECT * FROM REVIEW;
+select * from review_eu;
+
+
+--global
+--5 Asigurarea sincroniz?rii datelor pentru rela?iile replicate
+
+-- BOOK
+SELECT * FROM book_exeu;
+SELECT * FROM book_eu;
+
+CREATE OR REPLACE VIEW BOOK
+AS
+SELECT * FROM bdd.book_exeu;
+
+select * from book;
+
+-- REVIEW
+SELECT * FROM review_exeu;
+SELECT * FROM review_eu;
+
+CREATE OR REPLACE VIEW REVIEW
+AS
+SELECT * FROM bdd.review_exeu;
+
+select * from review;
+
+--TRIGGER BOOK  
+/
+CREATE OR REPLACE TRIGGER t_book_global
+INSTEAD OF 
+INSERT OR DELETE OR UPDATE ON book
+FOR EACH ROW
+DECLARE
+BEGIN
+    IF INSERTING THEN
+        insert into book_exeu (name,price,stock_status,year,description,id_publisher,id_category,id_author,id_serie)
+        VALUES(:NEW.name,:NEW.price,:NEW.stock_status,:NEW.year,:NEW.description,:NEW.id_publisher,:NEW.id_category,:NEW.id_author,:NEW.id_serie);  
+        
+    ELSIF UPDATING('price') THEN
+        update book_exeu
+        set price = :new.price
+        WHERE id_book = :old.id_book;
+    
+    ELSIF updating('stock_status') then
+       UPDATE book_exeu
+       SET stock_status = :new.stock_status
+       WHERE id_book = :old.id_book; 
+    
+    ELSIF DELETING THEN
+        delete from book_exeu
+        WHERE id_book = :old.id_book;
+       
+    END IF;
+END;
+/
+
+--verificare
+
+--insert
+
+insert into book(name,price,stock_status,year,description,id_publisher,id_category,id_author,id_serie)
+values ('GLOBAL BOOK',10.00,100,2022,'global book desc',65,61,321,81); --id = 1022
+commit;
+select * from book;
+select * from book_exeu;
+select * from book_eu;
+
+--update
+update book
+set price = 15.5
+where id_book = 1022;
+commit;
+
+update book
+set stock_status = 50
+where id_book = 1027;
+commit;
+
+select * from book;
+select * from book_exeu;
+select * from book_eu;
+
+--delete
+delete from book
+where id_book = 1022;
+commit;
+
+delete from book
+where id_book = 1027;
+commit;
+
+select * from book;
+select * from book_exeu;
+select * from book_eu;
+
+
+--TRIGGER REVIEW
+
+CREATE OR REPLACE TRIGGER t_review_global
+INSTEAD OF 
+INSERT OR DELETE OR UPDATE ON review
+FOR EACH ROW
+DECLARE
+BEGIN
+    IF INSERTING THEN
+        insert into review_exeu 
+        VALUES(:NEW.review_date,:NEW.id_user,:NEW.id_book,:NEW.rating,:NEW.review_comment); 
+        
+    ELSIF UPDATING('review_comment')or UPDATING('rating') THEN
+        update review_exeu
+        SET review_comment = :new.review_comment,
+       rating = :new.rating
+   WHERE review_date = :old.review_date AND id_user = :old.id_user and id_book = :old.id_book;
+        
+    ELSIF DELETING THEN
+        delete from review_exeu
+        WHERE review_date = :old.review_date AND id_user = :old.id_user and id_book = :old.id_book;
+       
+    END IF;
+END;
+/
+--Verificare
+
+--insert
+INSERT INTO review values (sysdate,6,2,2,'La a doua citire nu mi-a mai placut');
+commit;
+
+SELECT * FROM REVIEW;
+select * from review_exeu;
+select * from review_eu;
+
+--update
+--select * from review
+--where id_user = 6 and id_book  = 2 and TRUNC(review_date) = TRUNC(SYSDATE);
+
+update review
+set review_comment = 'Citirea 2', rating = 3
+where id_user = 6 and id_book  = 2 and TRUNC(review_date) = TRUNC(SYSDATE);
+commit;
+
+SELECT * FROM REVIEW;
+select * from review_exeu;
+select * from review_eu;
+
+--delete
+delete from review
+where id_user = 6 and id_book  = 2 and TRUNC(review_date) = TRUNC(SYSDATE);
+commit;
+
+SELECT * FROM REVIEW;
+select * from review_exeu;
+select * from review_eu;
+
+
+--6 Asigurarea tuturor constrângerilor de integritate folosite în model (atât la nivel local, 
+cât și la nivel global) 
+
+--exeu
+--6.
+--unicitate
+
+--country_exeu
+--desc country_exeu
+alter table country_exeu
+add constraint u_country_exeu unique (name);
+
+--inainte de inserarea in country_exeu trebuie sa se verifice daca nu mai 
+--exista deja cineva cu acel nume in country_eu
+select * from country_exeu;
+select * from country_eu@bd_eu;
+    
+create or replace trigger trig_loc_country_exeu
+before insert or update of name on country_exeu
+for each row
+declare
+nr_eu number(4);
+nr_exeu number(4);
+sum_ number(4);
+begin
+    select 1 into nr_eu
+    from country_eu
+    where name = :new.name;
+    raise_application_error (-20003,'Constrangere de unicitate incalcata. Fragmentul country_eu contine acceasi valoare pentru numele introdus.');
+exception
+   when no_data_found then null;
+end;
+/
+ --verificare
+ select count(*)
+from country_exeu
+where name = 'Estonia';
+
+select count(*)
+from country_eu
+where name = 'Estonia';
+
+insert into country_exeu(name) values('Estonia');
+
+--2. unicitate pe email
+--user_tam_exeu
+select * from user_tam_exeu;
+--desc user_tam_exeu
+alter table user_tam_exeu
+add constraint u_user_tam_exeu unique (email);
+
+--inainte de inserarea in user_tam_exeu trebuie sa se verifice daca nu mai 
+--exista deja cineva cu acel EMAIL in user_tam_exeu/eu
+
+create or replace trigger trig_loc_user_exeu
+before insert on user_tam_exeu
+for each row
+declare
+nr number(4);
+begin
+    select 1 into nr
+    from user_tam_eu --care are aceleasi valori cu user_tam_exeu
+    where email = :new.email;
+    raise_application_error (-20005,'Constrangere de unicitate incalcata. Fragmentul user_tam_eu care are aceleasi valori cu user_tam_exeu contine acceasi valoare pentru email-ul introdus.');
+exception
+   when no_data_found then null;
+end;
+/
+
+
+--CHEIE PRIMARA
+
+--country
+select * from country_exeu;
+
+ALTER TABLE country_exeu
+ADD CONSTRAINT pk_country_exeu PRIMARY KEY (id_country);
+
+CREATE SEQUENCE sec_country_exeu
+INCREMENT BY 2
+START WITH 42
+NOCYCLE;
+
+alter table country_exeu modify
+   id_country default sec_country_exeu.nextval;
+   
+GRANT SELECT ON sec_country_exeu TO bdd_global;
+
+--select sec_country_eu.nextval@bd_eu from dual;
+
+
+--city
+select * from city;
+
+ALTER TABLE CITY_EXEU
+ADD CONSTRAINT pk_city_exeu PRIMARY KEY (id_city);
+
+CREATE SEQUENCE sec_city_exeu
+INCREMENT BY 2
+START WITH 88
+NOCYCLE;
+
+GRANT SELECT ON sec_city_exeu TO bdd_global;
+
+alter table city_exeu modify
+   id_city default sec_city_exeu.nextval;
+   
+--address
+select * from address;
+
+ALTER TABLE ADDRESS_EXEU
+ADD CONSTRAINT pk_address_exeu PRIMARY KEY (id_address);
+
+CREATE SEQUENCE sec_address_exeu
+INCREMENT BY 2
+START WITH 48
+NOCYCLE;
+
+GRANT SELECT ON sec_address_exeu TO bdd_global;
+
+alter table ADDRESS_EXEU modify
+   id_address default sec_address_exeu.nextval;
+   
+--order_tam
+select * from order_tam_exeu;
+
+ALTER TABLE ORDER_TAM_EXEU
+ADD CONSTRAINT pk_order_tam_exeu PRIMARY KEY (id_order);
+
+CREATE SEQUENCE sec_order_tam_exeu
+INCREMENT BY 2
+START WITH 172
+NOCYCLE;
+
+GRANT SELECT ON sec_order_tam_exeu TO bdd_global;
+
+alter table ORDER_TAM_EXEU modify
+   id_order default sec_order_tam_exeu.nextval;
+   
+--order_detail 
+--aici ar trebui sa fie un trigger care sa verifice inainte de inserare sa nu fie aceeasi combinatie in eu
+
+select * from order_detail_exeu;
+
+ALTER TABLE order_detail_exeu
+ADD CONSTRAINT pk_order_detail_exeu PRIMARY KEY (id_order, id_book);
+
+--ne asiguram ca nu exista in order_detail_eu deja inserata combinatia pentru acel order si book inainte de inserare pk (desi nu are sens...)
+select * 
+from order_detail_eu;
+
+create or replace trigger trig_loc_order_detail_exeu
+before insert on order_detail_exeu
+for each row
+declare
+nr number(4);
+begin
+    select 1 into nr
+    from order_detail_eu 
+    where id_book = :new.id_book and id_order = :new.id_order;
+    raise_application_error (-20005,'Constrangere de cheie primara incalcata. Fragmentul order_detail_eu contine acceasi combinatie pentru id_book si id_order introduse.');
+exception
+   when no_data_found then null;
+end;
+/
+--in eu deja exista inregistrare cu id_order = 154 si id_book = 227;
+insert into order_detail_exeu values(154,227,1,12.62,0);
+commit;
+
+--user_tam - fragment vertical
+select * from user_tam_exeu;
+
+ALTER TABLE user_tam_exeu
+ADD CONSTRAINT pk_user_tam_exeu PRIMARY KEY (id_user);
+
+CREATE SEQUENCE sec_user_tam_exeu
+INCREMENT BY 1
+START WITH 47
+NOCYCLE;
+
+GRANT SELECT ON sec_user_tam_exeu TO bdd_global;
+
+--select sec_country_eu.nextval@bd_eu from dual;
+select sec_user_tam_exeu from dual;
+
+--book - replicat
+select * from book_exeu;
+
+ALTER TABLE book_exeu
+ADD CONSTRAINT pk_book_exeu PRIMARY KEY (id_book);
+
+CREATE SEQUENCE sec_book_exeu
+INCREMENT BY 1
+START WITH 1022
+NOCYCLE;
+
+GRANT SELECT ON sec_book_exeu TO bdd_global;
+
+alter table book_exeu modify
+   id_book default sec_book_exeu.nextval;
+
+
+--review - replicat 
+select * from review_exeu;
+
+ALTER TABLE review_exeu
+ADD CONSTRAINT pk_review_exeu PRIMARY KEY (review_date,id_user,id_book);
+
+
+
+--FK
+--city
+alter table city_exeu
+add constraint fk_city_id_country foreign key (id_country)
+references country_exeu(id_country);
+
+--address
+alter table address_exeu
+add constraint fk_address_id_city foreign key (id_city)
+references city_exeu(id_city);
+
+alter table address_exeu
+add constraint fk_address_id_user foreign key (id_user)
+references user_tam_exeu(id_user);
+
+--order_tam
+alter table order_tam_exeu
+add constraint fk_order_tam_id_user foreign key (id_user)
+references user_tam_exeu(id_user);
+
+alter table order_tam_exeu
+add constraint fk_order_tam_id_address foreign key (id_address)
+references address_exeu(id_address);
+
+--order_detail
+alter table order_detail_exeu
+add constraint fk_order_detail_id_order foreign key (id_order)
+references order_tam_exeu(id_order);
+
+alter table order_detail_exeu
+add constraint fk_order_detail_id_book foreign key (id_book)
+references book_exeu(id_book);
+
+--review
+alter table review_exeu
+add constraint fk_review_id_user foreign key (id_user)
+references user_tam_exeu(id_user);
+
+alter table review_exeu
+add constraint fk_review_id_book foreign key (id_book)
+references book_exeu(id_book);
+
+--CHECK
+ALTER TABLE review_exeu
+add constraint ck_review_exeu_rating check(rating between 1 and 5);
+
+select * from review;
+insert into review values(sysdate,6,2,10,'perfect');
+
+commit;
+
+
+--eu
+--6.
+--unicitate fragment orizontal
+
+--desc country_eu
+alter table country_eu
+add constraint u_country_eu unique (name);
+
+--inainte de inserarea in country_eu trebuie sa se verifice daca nu mai 
+--exista deja cineva cu acel nume in country_exeu
+select * from country_exeu;
+select * from country_eu;
+    
+create or replace trigger trig_loc_country_eu --loc de la local
+before insert or update on country_eu
+for each row
+declare
+nr_eu number(4);
+nr_exeu number(4);
+sum_ number(4);
+begin
+    select 1 into nr_exeu
+    from country_exeu
+    where name = :new.name;
+    raise_application_error (-20003,'Constrangere de unicitate incalcata. Fragmentul country_exeu contine acceasi valoare pentru numele introdus.');
+exception
+   when no_data_found then null;
+end;
+/
+
+select count(*)
+from country_exeu
+where name = 'Canada';
+
+select count(*)
+from country_eu
+where name = 'Canada';
+
+insert into country_eu(name) values('Estonia');
+insert into country_eu(name) values('Canada');
+--user_tam_eu
+select * from user_tam_eu;
+
+desc user_tam_eu
+alter table user_tam_eu
+add constraint u_user_tam_eu unique (email);
+
+
+--CHEIE PRIMARA
+
+--country
+select * from country_eu;
+
+ALTER TABLE country_eu
+ADD CONSTRAINT pk_country_eu PRIMARY KEY (id_country);
+
+CREATE SEQUENCE sec_country_eu
+INCREMENT BY 2
+START WITH 43
+NOCYCLE;
+
+alter table country_eu modify
+   id_country default sec_country_eu.nextval;
+   
+--GRANT SELECT ON sec_country_eu TO bdd; --nu l-am folosit
+
+--city
+select * from city;
+
+ALTER TABLE CITY_EU
+ADD CONSTRAINT pk_city_eu PRIMARY KEY (id_city);
+
+CREATE SEQUENCE sec_city_eu
+INCREMENT BY 2
+START WITH 89
+NOCYCLE;
+
+alter table city_eu modify
+   id_city default sec_city_eu.nextval;
+   
+
+--address
+select * from address_eu;
+
+ALTER TABLE ADDRESS_EU
+ADD CONSTRAINT pk_address_eu PRIMARY KEY (id_address);
+
+CREATE SEQUENCE sec_address_eu
+INCREMENT BY 2
+START WITH 47
+NOCYCLE;
+
+alter table address_eu modify
+   id_address default sec_address_eu.nextval;
+   
+--order_tam
+select * from order_tam_eu;
+
+ALTER TABLE ORDER_TAM_EU
+ADD CONSTRAINT pk_order_tam_eu PRIMARY KEY (id_order);
+
+CREATE SEQUENCE sec_order_tam_eu
+INCREMENT BY 2
+START WITH 173
+NOCYCLE;
+
+alter table ORDER_TAM_EU modify
+   id_order default sec_order_tam_eu.nextval;
+
+--order_detail
+select * from order_detail_eu;
+
+ALTER TABLE order_detail_eu
+ADD CONSTRAINT pk_order_detail_eu PRIMARY KEY (id_order, id_book);
+
+--ne asiguram ca nu exista in order_detail_eu deja inserata combinatia pentru acel order si book inainte de inserare pk (desi nu are sens...)
+select * 
+from order_detail_exeu;
+
+create or replace trigger trig_loc_order_detail_eu
+before insert on order_detail_eu
+for each row
+declare
+nr number(4);
+begin
+    select 1 into nr
+    from order_detail_exeu 
+    where id_book = :new.id_book and id_order = :new.id_order;
+    raise_application_error (-20005,'Constrangere de cheie primara incalcata. Fragmentul order_detail_exeu contine acceasi combinatie pentru id_book si id_order introduse.');
+exception
+   when no_data_found then null;
+end;
+/
+--in exeu deja exista inregistrare cu id_order = 69 si id_book = 589;
+insert into order_detail values(69,589,1,84.21,0);
+commit;
+
+--user_tam - fragment vertical
+select * from user_tam_eu;
+
+ALTER TABLE user_tam_eu
+ADD CONSTRAINT pk_user_tam_eu PRIMARY KEY (id_user);
+
+--book - replicat
+select * from book_eu;
+
+ALTER TABLE book_eu
+ADD CONSTRAINT pk_book_eu PRIMARY KEY (id_book);
+
+--review - replicat
+select * from review_eu;
+
+ALTER TABLE review_eu
+ADD CONSTRAINT pk_review_eu PRIMARY KEY (review_date,id_user,id_book);
+
+
+--FK
+--city
+alter table city_eu
+add constraint fk_city_eu_id_country foreign key (id_country)
+references country_eu(id_country);
+
+--address
+alter table address_eu
+add constraint fk_address_eu_id_city foreign key (id_city)
+references city_eu(id_city);
+
+alter table address_eu
+add constraint fk_address_eu_id_user foreign key (id_user)
+references user_tam_eu(id_user);
+
+--order_tam
+alter table order_tam_eu
+add constraint fk_order_tam_eu_id_user foreign key (id_user)
+references user_tam_eu(id_user);
+
+alter table order_tam_eu
+add constraint fk_order_tam_eu_id_address foreign key (id_address)
+references address_eu(id_address);
+
+--order_detail
+alter table order_detail_eu
+add constraint fk_order_detail_eu_id_order foreign key (id_order)
+references order_tam_eu(id_order);
+
+alter table order_detail_eu
+add constraint fk_order_detail_eu_id_book foreign key (id_book)
+references book_eu(id_book);
+
+--review
+alter table review_eu
+add constraint fk_review_eu_id_user foreign key (id_user)
+references user_tam_eu(id_user);
+
+alter table review_eu
+add constraint fk_review_eu_id_book foreign key (id_book)
+references book_eu(id_book);
+
+--CHECK
+ALTER TABLE review_eu
+add constraint ck_review_eu_rating check(rating between 1 and 5);
+
+select * from review;
+insert into review values(sysdate,6,2,10,'perfect');
+commit;
+
+
+--global
+
+----6.
+--unicitate
+--name pentru country
+insert into country(name) values ('Estonia');
+insert into country(name) values ('Canada');--exeu
+
+-- email
+select * from user_tam;
+
+insert into user_tam (name,email,password,accountcreationdate,is_deleted,gender,type)
+values ('NAME','EMAIL','PASS',sysdate,0,'F','Persoana juridica'); 
+commit; --dupa commit imi apar modificarile si in cele locale eu si exeu
+
+select * from user_tam;
+select * from bdd.user_tam_exeu;
+select * from bdd.user_tam_eu@bd_eu;
+select * from user_tam_global;
+
+insert into user_tam (name,email,password,accountcreationdate,is_deleted,gender,type)
+values ('NAME','EMAIL','PASS',sysdate,0,'F','Persoana juridica'); 
+
+delete from user_tam
+where id_user = 53;
+commit;
+
+--select * from country;
+--SELECT * FROM CITY;
+--select * from address;
+--select max(id_order) from order_tam;
+--
+--select max(id_user) from user_tam;
+
+--PK
+--order_detail verificare
+--in eu deja exista inregistrare cu id_order = 154 si id_book = 227;
+insert into order_detail values(154,227,1,12.62,0);
+
+--in exeu deja exista inregistrare cu id_order = 69 si id_book = 589;
+insert into order_detail values(69,589,1,84.21,0);
+
+--user_tam - fragment vertical
+select * from user_tam_global;
+
+ALTER TABLE user_tam_global
+ADD CONSTRAINT pk_user_tam_global PRIMARY KEY (id_user);
+
+--check
+--verificare check review
+select * from review;
+insert into review values(sysdate,6,2,10,'perfect');
+
+--check user_tam_global
+select * from user_tam;
+
+alter table user_tam_global
+add constraint ck_urser_tam_global_is_delete check(is_deleted IN (0,1));
+
+alter table user_tam_global
+add constraint ck_urser_tam_global_gender check(gender IN ('M','F'));
+
+alter table user_tam_global
+add constraint ck_urser_tam_global_type check(type IN ('Persoana fizica','Persoana juridica'));
+
+
+--trebuie sa dea eroare pentru ca type nu este una din valorile Persoana fizica sau Persoana juridica
+insert into user_tam (name,email,password,gender,type)
+values ('NAME','EMAIL','PASS','F','Persoana'); 
+rollback;
+
+
+--trebuie sa dea eroare pentru ca gender nu are valoarea valida (trebuie sa fie M sau F)
+insert into user_tam (name,email,password,gender,type)
+values ('NAME','EMAIL','PASS','Fi','Persoana fizica'); 
+
+--trebuie sa dea eroare ca is_deleted nu e 0 sau 1
+update user_tam
+set is_deleted= 5
+where id_user = 1;
+
+
+
+--7 Optimizarea cererii SQL propusă în raportul de analiză
+
+--eu
+/*
+Obtineti cele mai bine vandute carti per orasele
+Cluj-Napoca (1), Constanta (2), Iasi (5), Timisoara(6), Craiova (9)
+care au fost comandate (comanda avand status Completed sau Shipped)
+de utilizatori care inca sunt activi pe platforma
+si care au nume de sfant Ion, Maria, Mihail si Gavril.
+*/
+
+--pentru a putea vedea o diferenta considerabila in rezultat vom adauga un utilizator in 
+--orasul Iasi care a avut aceeasi comanda ca utilizatorul 5, 
+-- care a luat cartile 150 - 2 bucati si 500 - 1 bucata.
+
+--PASI
+--inserarea in user_tam din bdd_global
+--inserare adresa de iasi
+select * from user_tam_eu; --id_user = 51
+select * from address_eu; --id_address 49
+insert into address_eu (street,block,id_city,id_user)
+values('Street Mihalcea','Bloc Mih',5,51);
+commit;
+--inserare order_tam_eu
+select id_user from user_tam_eu
+where name = 'Mihai Georgescu'; --5
+
+select * from order_tam_eu --id_orderuri 55,3,5,32,105,132
+where id_user = 5;
+
+select * from book_eu where name='book_150';--id 150
+select * from order_detail_eu where id_order = 5;
+select * from order_tam_eu where id_order = 5;
+
+
+insert into order_tam_eu(id_user,order_date,total_price,status,id_address)
+values (51,SYSDATE,206.13,'Completed',49); --id_order = 177
+commit;
+--inserare_order_detail si update order_tam
+insert into order_detail_eu(id_order,id_book,quantity,price,discount)
+values (177,150,2,78.73,5);
+insert into order_detail_eu(id_order,id_book,quantity,price,discount)
+values (177,500,1,62.82,10);
+commit;
+
+
+--global
+insert into user_tam (name,email,password,gender,type)
+values ('Ion Mihalcea','ion.mihalcea@yahoo.com','password123','M','Persoana fizica'); 
+commit;
+
+--se insereaza si apoi se sterg daca se vrea
+insert into user_tam (name,email,password,gender,type)
+values ('Ion Clark','ion.clark@yahoo.com','password123','M','Persoana fizica'); --59
+
+insert into user_tam (name,email,password,gender,type)
+values ('Ana Sanr','ana.sanr@yahoo.com','password123','F','Persoana fizica'); --60
+commit;
+
+update user_tam
+set is_deleted = 1
+where id_user in (59,60);
+commit;
+
+select * from user_tam;
+
+--CEREREA NEOPTIMIZATA
+SELECT rnk, valoare_total_cheltuit, book, city
+FROM (
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1) AS valoare_total_cheltuit,
+        b_eu.name AS book,
+        c_eu.name AS city,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rnk
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Cluj-Napoca'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Constanta'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Iasi'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Timisoara'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Craiovaa'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+)
+WHERE rnk <= 4;
+
+
+
+--CEREREA DIN CAZUL 2 DE OPTIMIZARE METODA JOIN
+SELECT rank, valoare_total_cheltuit, book, city
+from (
+select
+round(sum(od_e.quantity * od_e.price),1) AS valoare_total_cheltuit,
+b_eu.name AS book,
+c_eu.name as city,
+ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+
+from order_detail_eu od_e
+join order_tam_eu ot_e on od_e.id_order = ot_e.id_order
+join address_eu a_eu on a_eu.id_address = ot_e.id_address
+join city_eu c_eu on c_eu.id_city = a_eu.id_city
+join user_tam_eu u_eu on ot_e.id_user = u_eu.id_user
+join book_eu b_eu on od_e.id_book = b_eu.id_book
+join user_tam_global ug on u_eu.id_user = ug.id_user
+
+where c_eu.name in ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+and ug.is_deleted = 0
+and SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN
+('Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+'Marian','Marin','Marinel','Marius','Marinelus',
+'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi')
+and ot_e.status in ('Completed','Shipped')
+group by b_eu.name,
+c_eu.name
+)
+where rank <=4;
+
+
+--CEREREA DIN CAZUL 2 DE OPTIMIZARE CU JOIN IN WHERE
+SELECT rank, valoare_total_cheltuit, book, city
+from (
+select
+round(sum(od_e.quantity * od_e.price),1) AS valoare_total_cheltuit,
+b_eu.name AS book,
+c_eu.name as city,
+ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+
+from order_detail_eu od_e,
+ order_tam_eu ot_e,
+ address_eu a_eu ,
+ city_eu c_eu ,
+ user_tam_eu u_eu ,
+ book_eu b_eu,
+ user_tam_global ug
+where
+od_e.id_order = ot_e.id_order
+AND
+a_eu.id_address = ot_e.id_address
+AND 
+c_eu.id_city = a_eu.id_city
+AND
+ot_e.id_user = u_eu.id_user
+AND
+od_e.id_book = b_eu.id_book
+AND
+u_eu.id_user = ug.id_user
+and
+ug.is_deleted = 0 
+and
+c_eu.name in ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+and SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN
+('Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+'Marian','Marin','Marinel','Marius','Marinelus',
+'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi')
+and ot_e.status in ('Completed','Shipped')
+group by b_eu.name,
+c_eu.name
+)
+where rank <=4;
+
+
+--A Rule
+--eu
+-------------------------------------------------------------------------
+-- REZOLVARE A. RULE
+-------------------------------------------------------------------------
+--pentru rule
+--a planul de executie ales de optimizatorul bazat pe regula
+alter session set optimizer_mode = rule;
+--pentru cererea neoptimizata
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_regula_rule_NEOP'
+FOR 
+SELECT rnk, valoare_total_cheltuit, book, city
+FROM (
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1) AS valoare_total_cheltuit,
+        b_eu.name AS book,
+        c_eu.name AS city,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rnk
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Cluj-Napoca'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Constanta'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Iasi'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Timisoara'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Craiovaa'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+)
+WHERE rnk <= 4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_regula_rule_NEOP','SERIAL'));
+
+
+---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+--CAZ 1: transformare union in IN in acest caz
+--(spre deosebire de cost unde trecm si prin cazul union all,
+--aici la optimizare mergem direct spre operatorul IN)
+
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_regula_1'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+from (
+select
+round(sum(od_e.quantity * od_e.price),1) AS valoare_total_cheltuit,
+b_eu.name AS book,
+c_eu.name as city,
+ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+
+from order_detail_eu od_e
+join order_tam_eu ot_e on od_e.id_order = ot_e.id_order
+join address_eu a_eu on a_eu.id_address = ot_e.id_address
+join city_eu c_eu on c_eu.id_city = a_eu.id_city
+join user_tam_eu u_eu on ot_e.id_user = u_eu.id_user
+join book_eu b_eu on od_e.id_book = b_eu.id_book
+join user_tam_global ug on u_eu.id_user = ug.id_user
+
+where c_eu.name in ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+and ug.is_deleted = 0
+and SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN
+('Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+'Marian','Marin','Marinel','Marius','Marinelus',
+'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi')
+and ot_e.status in ('Completed','Shipped')
+group by b_eu.name,c_eu.name
+)
+where rank <=4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_regula_1','SERIAL'));
+
+
+SELECT OTHER
+FROM PLAN_TABLE
+WHERE STATEMENT_ID = 'exp_plan_eu_regula_1'
+AND operation = 'REMOTE';
+------------------------------------------------------------------------------
+----------------------------------- cu where ---------------------------------
+--Cazul 2: Join in WHERE
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_regula_2'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+from (
+select
+round(sum(od_e.quantity * od_e.price),1) AS valoare_total_cheltuit,
+b_eu.name AS book,
+c_eu.name as city,
+ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+
+from order_detail_eu od_e,
+ order_tam_eu ot_e,
+ address_eu a_eu ,
+ city_eu c_eu ,
+ user_tam_eu u_eu ,
+ book_eu b_eu,
+user_tam_global ug
+where
+od_e.id_order = ot_e.id_order
+AND
+a_eu.id_address = ot_e.id_address
+AND 
+c_eu.id_city = a_eu.id_city
+AND
+ot_e.id_user = u_eu.id_user
+AND
+od_e.id_book = b_eu.id_book
+AND
+u_eu.id_user = ug.id_user
+and
+ug.is_deleted = 0 
+and
+c_eu.name in ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+and SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN
+('Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+'Marian','Marin','Marinel','Marius','Marinelus',
+'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi')
+and ot_e.status in ('Completed','Shipped')
+group by b_eu.name,
+c_eu.name
+)
+where rank <=4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_regula_2','SERIAL')); --ACELASI PLAN CA JOIN
+
+----------------------------------------------------------------------------
+-----------------------------INLINE------------------------------------------  
+--Caz 3: Rezolvarea cererii anterioare utilizând o vizualizare inline 
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_regula_3'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+FROM (
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1) AS valoare_total_cheltuit,
+        b_eu.name AS book,
+        c_eu.name AS city,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+    FROM 
+        (SELECT id_order, id_book, quantity, price 
+         FROM order_detail_eu) od_e,
+        (SELECT id_order, id_user, id_address, status 
+         FROM order_tam_eu 
+         WHERE status IN ('Completed','Shipped')) ot_e,
+        (SELECT id_address, id_city 
+         FROM address_eu) a_eu,
+        (SELECT id_city, name 
+         FROM city_eu 
+         WHERE name IN ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')) c_eu,
+        (SELECT id_user 
+         FROM user_tam_eu
+         where SUBSTR(name, 1, INSTR(name, ' ') - 1) IN (
+        'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara','Marian',
+        'Marin','Marinel','Marius','Marinelus',
+        'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Oana',
+        'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+        'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela'
+      )) u_eu,
+        (SELECT id_book, name 
+         FROM book_eu) b_eu,
+         (SELECT id_user
+         from user_tam_global
+         where is_deleted = 0) ug
+    WHERE od_e.id_order = ot_e.id_order
+      AND ot_e.id_address = a_eu.id_address
+      AND a_eu.id_city = c_eu.id_city
+      AND ot_e.id_user = u_eu.id_user
+      AND od_e.id_book = b_eu.id_book
+      AND u_eu.id_user = ug.id_user
+      
+    GROUP BY b_eu.name, c_eu.name
+)
+WHERE rank <= 4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_regula_3','SERIAL'));--le fel cu cel de join fara inline 
+
+-----------------------------------------------------------------------------
+--------------------------------SCHIMBARE ORDINE JOIN------------------------
+--Cazul 4: Schimbarea ordinii join-urilor 
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_regula_4'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+from (
+select
+round(sum(od_e.quantity * od_e.price),1) AS valoare_total_cheltuit,
+b_eu.name AS book,
+c_eu.name as city,
+ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+
+from 
+user_tam_global ug,
+ user_tam_eu u_eu,
+ order_tam_eu ot_e,
+order_detail_eu od_e,
+city_eu c_eu,
+ address_eu a_eu,
+ book_eu b_eu
+where
+ug.id_user = u_eu.id_user
+and
+ot_e.id_user = u_eu.id_user
+and
+a_eu.id_address = ot_e.id_address
+AND 
+c_eu.id_city = a_eu.id_city
+AND
+od_e.id_order = ot_e.id_order
+AND
+od_e.id_book = b_eu.id_book
+
+and
+ug.is_deleted = 0 
+and
+c_eu.name in ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+and SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN
+('Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+'Marian','Marin','Marinel','Marius','Marinelus',
+'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi')
+and ot_e.status in ('Completed','Shipped')
+group by b_eu.name,
+c_eu.name
+)
+where rank <=4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_regula_4','SERIAL'));
+
+
+--exeu
+CREATE OR REPLACE SYNONYM user_tam_global FOR bdd_global.user_tam_global;
+select * from bdd_global.user_tam_global;
+select * from user_tam_global;
+
+
+alter session set optimizer_mode = rule;
+
+explain plan 
+SET STATEMENT_ID = 'exp_plan_exeu_regula_1'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+from (
+select
+round(sum(od_e.quantity * od_e.price),1) AS valoare_total_cheltuit,
+b_eu.name AS book,
+c_eu.name as city,
+ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+
+from order_detail_eu od_e
+join order_tam_eu ot_e on od_e.id_order = ot_e.id_order
+join address_eu a_eu on a_eu.id_address = ot_e.id_address
+join city_eu c_eu on c_eu.id_city = a_eu.id_city
+join user_tam_eu u_eu on ot_e.id_user = u_eu.id_user
+join book_eu b_eu on od_e.id_book = b_eu.id_book
+join user_tam_global ug on u_eu.id_user = ug.id_user
+
+where c_eu.name in ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+and ug.is_deleted = 0
+and SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN
+('Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+'Marian','Marin','Marinel','Marius','Marinelus',
+'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi')
+and ot_e.status in ('Completed','Shipped')
+group by b_eu.name,
+c_eu.name
+)
+where rank <=4;
+
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_exeu_regula_1','SERIAL'));
+--DIFERENTA fata de cererea rulata in bdd_eu este ca toate tabele, mai putin pe user_tam_global, sunt luate prin remote din EU.
+-- 
+-----------------------------INLINE------------------------------------------  
+explain plan 
+SET STATEMENT_ID = 'exp_plan_exeu_regula_2'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+FROM (
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1) AS valoare_total_cheltuit,
+        b_eu.name AS book,
+        c_eu.name AS city,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+    FROM 
+        (SELECT id_order, id_book, quantity, price 
+         FROM order_detail_eu) od_e,
+        (SELECT id_order, id_user, id_address, status 
+         FROM order_tam_eu 
+         WHERE status IN ('Completed','Shipped')) ot_e,
+        (SELECT id_address, id_city 
+         FROM address_eu) a_eu,
+        (SELECT id_city, name 
+         FROM city_eu 
+         WHERE name IN ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')) c_eu,
+        (SELECT id_user 
+         FROM user_tam_eu
+         where SUBSTR(name, 1, INSTR(name, ' ') - 1) IN (
+        'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara','Marian',
+        'Marin','Marinel','Marius','Marinelus',
+        'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Oana',
+        'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+        'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela')) u_eu,
+        (SELECT id_book, name 
+         FROM book_eu) b_eu,
+         (SELECT id_user
+         from user_tam_global
+         where is_deleted = 0) ug
+    WHERE od_e.id_order = ot_e.id_order
+      AND ot_e.id_address = a_eu.id_address
+      AND a_eu.id_city = c_eu.id_city
+      AND ot_e.id_user = u_eu.id_user
+      AND od_e.id_book = b_eu.id_book
+      AND u_eu.id_user = ug.id_user
+      
+    GROUP BY b_eu.name, c_eu.name
+)
+WHERE rank <= 4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_exeu_regula_2','SERIAL'));
+--INLINE ARE ACELASI PLAN CA CEL FARA INLINE
+
+-----------------------------------------------------------------------------
+--------------------------------SCHIMBARE ORDINE JOIN------------------------
+
+explain plan 
+SET STATEMENT_ID = 'exp_plan_exeu_regula_4'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+from (
+select
+round(sum(od_e.quantity * od_e.price),1) AS valoare_total_cheltuit,
+b_eu.name AS book,
+c_eu.name as city,
+ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+
+from 
+user_tam_global ug,
+ user_tam_eu u_eu,
+ order_tam_eu ot_e,
+order_detail_eu od_e,
+city_eu c_eu,
+ address_eu a_eu,
+ book_eu b_eu
+where
+ug.id_user = u_eu.id_user
+and
+ot_e.id_user = u_eu.id_user
+and
+a_eu.id_address = ot_e.id_address
+AND 
+c_eu.id_city = a_eu.id_city
+AND
+od_e.id_order = ot_e.id_order
+AND
+od_e.id_book = b_eu.id_book
+
+and
+ug.is_deleted = 0 
+and
+c_eu.name in ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+and SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN
+('Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+'Marian','Marin','Marinel','Marius','Marinelus',
+'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi')
+and ot_e.status in ('Completed','Shipped')
+group by b_eu.name,
+c_eu.name
+)
+where rank <=4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_exeu_regula_4','SERIAL'));
+
+--b planul de execuție ales de optimizatorul bazat pe cost 
+--eu
+--7.b planul de execu?ie ales de optimizatorul bazat pe cost
+alter session set optimizer_mode = choose;
+
+ANALYZE TABLE order_detail_eu COMPUTE STATISTICS;
+ANALYZE TABLE order_tam_eu COMPUTE STATISTICS;
+ANALYZE TABLE address_eu COMPUTE STATISTICS;
+ANALYZE TABLE city_eu COMPUTE STATISTICS;
+ANALYZE TABLE user_tam_eu COMPUTE STATISTICS;
+ANALYZE TABLE book_eu COMPUTE STATISTICS;
+--si analyze in bdd_global:
+ANALYZE TABLE user_tam_global COMPUTE STATISTICS;
+
+
+--NEOPTIMIZATA
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_regula_choose_NEOP'
+FOR 
+SELECT rnk, valoare_total_cheltuit, book, city
+FROM (
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1) AS valoare_total_cheltuit,
+        b_eu.name AS book,
+        c_eu.name AS city,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rnk
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Cluj-Napoca'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Constanta'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Iasi'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Timisoara'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION 
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Craiovaa'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+)
+WHERE rnk <= 4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_regula_choose_NEOP','SERIAL'));
+--cost 136
+
+----------------------------------------------------------
+---------------------UNION ALL---------------------------
+--CAZ 1: transformare union in union all
+
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_choose_UNION_ALL'
+FOR 
+SELECT rnk, valoare_total_cheltuit, book, city
+FROM (
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1) AS valoare_total_cheltuit,
+        b_eu.name AS book,
+        c_eu.name AS city,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rnk
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Cluj-Napoca'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION ALL
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Constanta'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION ALL
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Iasi'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION ALL
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Timisoara'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+
+    UNION ALL
+
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1),
+        b_eu.name,
+        c_eu.name,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        )
+    FROM order_detail_eu od_e
+    JOIN order_tam_eu ot_e ON od_e.id_order = ot_e.id_order
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN user_tam_eu u_eu ON ot_e.id_user = u_eu.id_user
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+    JOIN user_tam_global ug ON u_eu.id_user = ug.id_user
+    WHERE c_eu.name = 'Craiovaa'
+      AND ug.is_deleted = 0
+      AND SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN (
+          'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+          'Marian','Marin','Marinel','Marius','Marinelus',
+          'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+          'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+          'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+      )
+      AND ot_e.status IN ('Completed','Shipped')
+    GROUP BY b_eu.name, c_eu.name
+)
+WHERE rnk <= 4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_choose_UNION_ALL','SERIAL'));--cost 130
+
+
+
+
+
+------------------------------------------------------------------------------
+----------------------------Operator IN---------------------------------------
+--CAZ 2: reducerea union all la operatorul IN in acest caz
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_regula_choose_1'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+from (
+select
+round(sum(od_e.quantity * od_e.price),1) AS valoare_total_cheltuit,
+b_eu.name AS book,
+c_eu.name as city,
+ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+
+from order_detail_eu od_e
+join order_tam_eu ot_e on od_e.id_order = ot_e.id_order
+join address_eu a_eu on a_eu.id_address = ot_e.id_address
+join city_eu c_eu on c_eu.id_city = a_eu.id_city
+join user_tam_eu u_eu on ot_e.id_user = u_eu.id_user
+join book_eu b_eu on od_e.id_book = b_eu.id_book
+join user_tam_global ug on u_eu.id_user = ug.id_user
+
+where c_eu.name in ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+and ug.is_deleted = 0
+and SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN
+('Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+'Marian','Marin','Marinel','Marius','Marinelus',
+'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi')
+and ot_e.status in ('Completed','Shipped')
+group by b_eu.name,
+c_eu.name
+)
+where rank <=4;
+
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_regula_choose_1','SERIAL')); --cost 31
+
+
+------------------------------------------------------------------
+---------------------------INLINE---------------------------------
+--CAZ 3
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_regula_choose_2'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+FROM (
+    SELECT
+        ROUND(SUM(od_e.quantity * od_e.price), 1) AS valoare_total_cheltuit,
+        b_eu.name AS book,
+        c_eu.name AS city,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+    FROM 
+        (SELECT id_order, id_book, quantity, price 
+         FROM order_detail_eu) od_e,
+        (SELECT id_order, id_user, id_address, status 
+         FROM order_tam_eu 
+         WHERE status IN ('Completed','Shipped')) ot_e,
+        (SELECT id_address, id_city 
+         FROM address_eu) a_eu,
+        (SELECT id_city, name 
+         FROM city_eu 
+         WHERE name IN ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')) c_eu,
+        (SELECT id_user 
+         FROM user_tam_eu
+         where SUBSTR(name, 1, INSTR(name, ' ') - 1) IN (
+        'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara','Marian',
+        'Marin','Marinel','Marius','Marinelus',
+        'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Oana',
+        'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+        'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela'
+      )) u_eu,
+        (SELECT id_book, name 
+         FROM book_eu) b_eu,
+         (SELECT id_user
+         from user_tam_global
+         where is_deleted = 0) ug
+    WHERE od_e.id_order = ot_e.id_order
+      AND ot_e.id_address = a_eu.id_address
+      AND a_eu.id_city = c_eu.id_city
+      AND ot_e.id_user = u_eu.id_user
+      AND od_e.id_book = b_eu.id_book
+      AND u_eu.id_user = ug.id_user
+      
+    GROUP BY b_eu.name, c_eu.name
+)
+WHERE rank <= 4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_regula_choose_2','SERIAL'));--le fel cu cel de join fara inline 
+
+
+
+-----------------------------------------------------------------------
+------------------------------WITH-----------------------------------
+--CAZ 4
+EXPLAIN PLAN 
+SET STATEMENT_ID = 'exp_plan_choose_5'
+FOR
+WITH users_filtered AS (
+  SELECT id_user
+  FROM user_tam_global ug
+  WHERE ug.is_deleted = 0
+),
+prenume_filtrat AS (
+  SELECT id_user
+  FROM user_tam_eu
+  WHERE SUBSTR(name, 1, INSTR(name, ' ') - 1) IN (
+    'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+    'Marian','Marin','Marinel','Marius','Marinelus',
+    'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+    'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+    'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi'
+  )
+),
+joined_users AS (
+  SELECT u.id_user
+  FROM prenume_filtrat u
+  JOIN users_filtered ug ON u.id_user = ug.id_user
+),
+ranked_books AS (
+  SELECT
+    ROUND(SUM(od_e.quantity * od_e.price), 1) AS valoare_total_cheltuit,
+    b_eu.name AS book,
+    c_eu.name AS city,
+    ROW_NUMBER() OVER (
+      PARTITION BY c_eu.name
+      ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+    ) AS rank
+  FROM
+    joined_users ju
+    JOIN order_tam_eu ot_e ON ju.id_user = ot_e.id_user
+    JOIN address_eu a_eu ON ot_e.id_address = a_eu.id_address
+    JOIN city_eu c_eu ON a_eu.id_city = c_eu.id_city
+    JOIN order_detail_eu od_e ON od_e.id_order = ot_e.id_order
+    JOIN book_eu b_eu ON od_e.id_book = b_eu.id_book
+  WHERE
+    c_eu.name IN ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+    AND ot_e.status IN ('Completed','Shipped')
+  GROUP BY b_eu.name, c_eu.name
+)
+SELECT rank, valoare_total_cheltuit, book, city
+FROM ranked_books
+WHERE rank <= 4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_choose_5','SERIAL')); --COST 31 
+
+
+-------------------------------------------------------------
+----------------CREARE INDECSI PE FK--------------------------
+-- CAZ 5
+--order_detail_eu
+CREATE INDEX idx_od_id_order_det ON order_detail_eu(id_order);
+CREATE INDEX idx_od_id_book_det ON order_detail_eu(id_book);
+
+--order_tam_eu
+CREATE INDEX idx_od_id_user_ord ON order_tam_eu(id_user);
+CREATE INDEX idx_od_id_address_ord ON order_tam_eu(id_address);
+
+--address_eu 
+CREATE INDEX idx_od_id_city_add ON address_eu(id_city);
+CREATE INDEX idx_od_id_user_add ON address_eu(id_user);
+
+EXPLAIN PLAN 
+SET STATEMENT_ID = 'exp_plan_eu_choose_6'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+from (
+select
+round(sum(od_e.quantity * od_e.price),1) AS valoare_total_cheltuit,
+b_eu.name AS book,
+c_eu.name as city,
+ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+
+from order_detail_eu od_e
+join order_tam_eu ot_e on od_e.id_order = ot_e.id_order
+join address_eu a_eu on a_eu.id_address = ot_e.id_address
+join city_eu c_eu on c_eu.id_city = a_eu.id_city
+join user_tam_eu u_eu on ot_e.id_user = u_eu.id_user
+join book_eu b_eu on od_e.id_book = b_eu.id_book
+join user_tam_global ug on u_eu.id_user = ug.id_user
+
+where c_eu.name in ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+and ug.is_deleted = 0
+and SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN
+('Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+'Marian','Marin','Marinel','Marius','Marinelus',
+'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi')
+and ot_e.status in ('Completed','Shipped')
+group by b_eu.name,c_eu.name
+)
+where rank <=4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_choose_6','SERIAL')); --cost 29
+
+--------------------------INDECSI PE NAME CITY-------------------------
+--------------------------------------------------------------------------------
+--CAZ 6
+CREATE INDEX idx_city_name ON city_eu(name);
+
+
+EXPLAIN PLAN 
+SET STATEMENT_ID = 'exp_plan_eu_choose_8'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+from (
+select
+round(sum(od_e.quantity * od_e.price),1) AS valoare_total_cheltuit,
+b_eu.name AS book,
+c_eu.name as city,
+ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+
+from order_detail_eu od_e
+join order_tam_eu ot_e on od_e.id_order = ot_e.id_order
+join address_eu a_eu on a_eu.id_address = ot_e.id_address
+join city_eu c_eu on c_eu.id_city = a_eu.id_city
+join user_tam_eu u_eu on ot_e.id_user = u_eu.id_user
+join book_eu b_eu on od_e.id_book = b_eu.id_book
+join user_tam_global ug on u_eu.id_user = ug.id_user
+
+where c_eu.name in ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')
+and ug.is_deleted = 0
+and SUBSTR(u_eu.name, 1, INSTR(u_eu.name, ' ') - 1) IN
+('Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara',
+'Marian','Marin','Marinel','Marius','Marinelus',
+'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Ionica','Oana',
+'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela','Gabi')
+and ot_e.status in ('Completed','Shipped')
+group by b_eu.name,c_eu.name
+)
+where rank <=4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_choose_8','SERIAL')); --cost 27
+
+
+-------------------------------------------------------------------
+-----------------------------MERGE----------------------------------
+--CAZ 7
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_regula_choose_3'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+FROM (
+    SELECT /*+ MERGE(od_e) MERGE(ot_e) MERGE(a_eu) MERGE(c_eu) MERGE(u_eu) MERGE(b_eu) */
+        ROUND(SUM(od_e.quantity * od_e.price), 1) AS valoare_total_cheltuit,
+        b_eu.name AS book,
+        c_eu.name AS city,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+    FROM 
+        (SELECT id_order, id_book, quantity, price 
+         FROM order_detail_eu) od_e,
+        (SELECT id_order, id_user, id_address, status 
+         FROM order_tam_eu 
+         WHERE status IN ('Completed','Shipped')) ot_e,
+        (SELECT id_address, id_city 
+         FROM address_eu) a_eu,
+        (SELECT id_city, name 
+         FROM city_eu 
+         WHERE name IN ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')) c_eu,
+        (SELECT id_user 
+         FROM user_tam_eu
+         where SUBSTR(name, 1, INSTR(name, ' ') - 1) IN (
+        'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara','Marian',
+        'Marin','Marinel','Marius','Marinelus',
+        'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Oana',
+        'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+        'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela'
+      )) u_eu,
+        (SELECT id_book, name 
+         FROM book_eu) b_eu,
+         (SELECT id_user
+         from user_tam_global
+         where is_deleted = 0) ug
+    WHERE od_e.id_order = ot_e.id_order
+      AND ot_e.id_address = a_eu.id_address
+      AND a_eu.id_city = c_eu.id_city
+      AND ot_e.id_user = u_eu.id_user
+      AND od_e.id_book = b_eu.id_book
+      AND u_eu.id_user = ug.id_user
+      
+    GROUP BY b_eu.name, c_eu.name
+)
+WHERE rank <= 4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_regula_choose_3','SERIAL'));--cost 27 
+
+
+--------------------------------------------------------------------------------
+-----------------------------DRIVING SITE EXEU----------------------------------
+--CAZ 8
+explain plan 
+SET STATEMENT_ID = 'exp_plan_eu_regula_choose_4'
+FOR 
+SELECT rank, valoare_total_cheltuit, book, city
+FROM (
+    SELECT /*+DRIVING_SITE(ug)*/ 
+        ROUND(SUM(od_e.quantity * od_e.price), 1) AS valoare_total_cheltuit,
+        b_eu.name AS book,
+        c_eu.name AS city,
+        ROW_NUMBER() OVER (
+            PARTITION BY c_eu.name
+            ORDER BY ROUND(SUM(od_e.quantity * od_e.price), 1) DESC
+        ) AS rank
+    FROM 
+        (SELECT id_order, id_book, quantity, price 
+         FROM order_detail_eu) od_e,
+        (SELECT id_order, id_user, id_address, status 
+         FROM order_tam_eu 
+         WHERE status IN ('Completed','Shipped')) ot_e,
+        (SELECT id_address, id_city 
+         FROM address_eu) a_eu,
+        (SELECT id_city, name 
+         FROM city_eu 
+         WHERE name IN ('Cluj-Napoca','Constanta','Iasi','Timisoara','Craiovaa')) c_eu,
+        (SELECT id_user 
+         FROM user_tam_eu
+         where SUBSTR(name, 1, INSTR(name, ' ') - 1) IN (
+        'Maria','Mariana','Marinela','Marioara','Marilena','Mariuca','Marica','Mara','Marian',
+        'Marin','Marinel','Marius','Marinelus',
+        'Ion','Ioan','Ionut','Ionica','Ionel','Ioana','Ionela','Oana',
+        'Mihail','Mihai','Mihaita','Mihnea','Mihaela','Mihalina',
+        'Gavril','Gabriel','Gabi','Gavriil','Gavrila','Gabita','Gabriela'
+      )) u_eu,
+        (SELECT id_book, name 
+         FROM book_eu) b_eu,
+         (SELECT id_user
+         from user_tam_global
+         where is_deleted = 0) ug
+    WHERE od_e.id_order = ot_e.id_order
+      AND ot_e.id_address = a_eu.id_address
+      AND a_eu.id_city = c_eu.id_city
+      AND ot_e.id_user = u_eu.id_user
+      AND od_e.id_book = b_eu.id_book
+      AND u_eu.id_user = ug.id_user
+      
+    GROUP BY b_eu.name, c_eu.name
+)
+WHERE rank <= 4;
+
+SELECT plan_table_output FROM
+table(dbms_xplan.display('PLAN_TABLE', 'exp_plan_eu_regula_choose_4','SERIAL'));--cost 25
+
+
+--DROP INDECSI FK
+DROP INDEX idx_od_id_order_det;
+DROP INDEX idx_od_id_book_det;
+
+DROP INDEX idx_od_id_user_ord;
+DROP INDEX idx_od_id_address_ord;
+
+DROP INDEX idx_od_id_city_add;
+DROP INDEX idx_od_id_user_add;
+
+--DROP INDECSI FILTRARE
+DROP INDEX idx_city_name;
+
+--
+select * from user_tam_global;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
